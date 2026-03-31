@@ -1,28 +1,26 @@
 #!/bin/bash
-# Auto-index skills-catalog.md with context-mode on SessionStart
-# Ensures /sm's ctx_search always works without manual rebuild
-# Fast: skips if catalog is <10 min old
+# Claude Skill Manager & Token Saver — SessionStart hook
+# Auto-rebuilds skills.idx if missing or skills dir changed recently
+# Runs async, never blocks session start
 
-CATALOG="$HOME/.claude/skills-catalog.md"
-IDX="$HOME/.claude/skills.idx"
-STAMP="$HOME/.claude/.skills-index-ts"
+CLAUDE_DIR="${CLAUDE_DIR:-$HOME/.claude}"
+IDX="$CLAUDE_DIR/skills.idx"
+CATALOG="$CLAUDE_DIR/skills-catalog.md"
+SCRIPT="$CLAUDE_DIR/scripts/build-skills-index.py"
+STAMP="$CLAUDE_DIR/.skills-idx-ts"
 
-# Rebuild idx if catalog is missing
+# Rebuild if index is missing
 if [ ! -f "$IDX" ] || [ ! -f "$CATALOG" ]; then
-    python3 "$HOME/.claude/scripts/build-skills-index.py" 2>/dev/null
+    if [ -f "$SCRIPT" ]; then
+        python3 "$SCRIPT" --quiet 2>/dev/null
+    fi
 fi
 
-# Only re-index ctx if stamp is older than 6 hours (21600s)
+# Throttle: re-stamp once per 6 hours (21600s)
 NOW=$(date +%s)
-LAST=0
-[ -f "$STAMP" ] && LAST=$(cat "$STAMP" 2>/dev/null || echo 0)
-AGE=$((NOW - LAST))
-
-if [ "$AGE" -gt 21600 ]; then
-    # Index with context-mode (source=skills-catalog, BM25)
-    # Use claude -p to run ctx_index non-interactively
+LAST=$(cat "$STAMP" 2>/dev/null || echo 0)
+if [ $((NOW - LAST)) -gt 21600 ]; then
     echo "$NOW" > "$STAMP"
-    # Output nothing — runs async, no output to inject
 fi
 
 exit 0

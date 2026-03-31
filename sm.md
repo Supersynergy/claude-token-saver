@@ -1,224 +1,226 @@
 ---
 name: sm
-description: Skill Manager — find and load any of the 320 skills on demand. Auto-invokes when user asks "what skill", "which command", "can you", "do you have a skill for", or mentions needing a specific capability. Token-efficient: skills load lazily via index, never all at once.
-argument-hint: "[search <query> | load <name> | list [cat] | rebuild | auto <intent>]"
-allowed-tools: [Bash, Read, mcp__context-mode__ctx_search, mcp__context-mode__ctx_index]
+description: Claude Skill Manager & Token Saver — find, load, and manage skills on demand with ~0 token overhead. Auto-invokes when user asks "what skill", "which command", "can you", "do you have a skill for", mentions needing a capability, or says "skills". Saves tokens via lazy loading, ctx_search, and RTK integration.
+argument-hint: "[search <q> | load <name> | list [cat] | auto <intent> | stats | tokens | rebuild]"
+allowed-tools: [Bash, Read, mcp__context-mode__ctx_search, mcp__context-mode__ctx_index, mcp__context-mode__ctx_batch_execute, mcp__context-mode__ctx_stats]
 model: haiku
 ---
 
-# Skill Manager (sm) — On-Demand Skill Discovery
+# Claude Skill Manager & Token Saver (`/sm`)
 
-**Index**: `~/.claude/skills.idx` (320 skills, one line each — grep-able, 54KB)
-**Catalog**: `~/.claude/skills-catalog.md` (markdown, ctx_indexed by category)
-**Token cost of this lookup**: ~0 (index never enters context, only matches returned)
-
-## Dispatch on $ARGUMENTS
-
-Parse the first word of `$ARGUMENTS` to decide action:
+**Index**: `~/.claude/skills.idx` | grep-able TSV, instant
+**Catalog**: `~/.claude/skills-catalog.md` | ctx-indexed, BM25 semantic
+**Rule**: NEVER load all skills. grep index first → ctx_search if fuzzy → Read() only the match.
 
 ---
 
-### `search <query>` — Fast grep lookup
+## Dispatch on `$ARGUMENTS`
+
+Parse the **first word** to select action. Default (no args) → help + stats.
+
+---
+
+### `search <query>` — Instant grep, 0 tokens
 
 ```bash
 QUERY="${ARGUMENTS#search }"
+IDX="$HOME/.claude/skills.idx"
+[ ! -f "$IDX" ] && echo "Index missing. Run: /sm rebuild" && exit 0
+
 echo "=== Skills matching: $QUERY ==="
-rg -i "$QUERY" ~/.claude/skills.idx | awk -F'\t' '{
-    printf "  /%s\n    [%s] %s\n\n", $1, $2, $3
-}' | head -60
-```
+RESULTS=$(rg -i "$QUERY" "$IDX" 2>/dev/null)
 
-If grep returns 0 results, fall back to ctx_search (semantic).
-
----
-
-### `load <name>` — Read full skill content
-
-```bash
-NAME="${ARGUMENTS#load }"
-PATH=$(rg "^$NAME\t" ~/.claude/skills.idx | cut -f4)
-if [ -n "$PATH" ]; then
-    echo "=== Loading: /$NAME ==="
-    cat "$PATH"
+if [ -n "$RESULTS" ]; then
+  echo "$RESULTS" | awk -F'\t' '{printf "  /%-28s [%s] %s\n", $1, $2, $3}' | head -30
 else
-    echo "Not found: $NAME"
-    echo "Try: /sm search $NAME"
+  echo "No exact match. Fuzzy:"
+  for word in $QUERY; do
+    rg -i "$word" "$IDX" 2>/dev/null
+  done | sort -u | awk -F'\t' '{printf "  /%-28s [%s] %s\n", $1, $2, $3}' | head -20
+  echo ""
+  echo "For semantic search: /sm auto $QUERY"
 fi
 ```
 
 ---
 
-### `list [category]` — Show skills by category
+### `load <name>` — Read one skill on demand
+
+```bash
+NAME="${ARGUMENTS#load }"
+IDX="$HOME/.claude/skills.idx"
+
+LINE=$(rg "^${NAME}\t" "$IDX" 2>/dev/null | head -1)
+[ -z "$LINE" ] && LINE=$(rg -i "^${NAME}" "$IDX" 2>/dev/null | head -1)
+
+if [ -n "$LINE" ]; then
+  SKILL_PATH=$(echo "$LINE" | cut -f4)
+  echo "=== /$NAME ==="
+  cat "$SKILL_PATH"
+else
+  echo "Not found: $NAME. Did you mean:"
+  rg -i "$NAME" "$IDX" 2>/dev/null | awk -F'\t' '{printf "  /%s — %s\n", $1, $3}' | head -5
+fi
+```
+
+---
+
+### `list [category]` — Browse portfolio
 
 ```bash
 CAT="${ARGUMENTS#list}"
 CAT="${CAT## }"
+IDX="$HOME/.claude/skills.idx"
+
 if [ -z "$CAT" ]; then
-    # Summary: count per category
-    awk -F'\t' '{print $2}' ~/.claude/skills.idx | sort | uniq -c | sort -rn | \
-        awk '{printf "  %-14s %3d skills\n", $2, $1}'
+  TOTAL=$(wc -l < "$IDX" | tr -d ' ')
+  echo "=== Skills Portfolio ($TOTAL skills) ==="
+  awk -F'\t' '{print $2}' "$IDX" | sort | uniq -c | sort -rn | \
+    awk '{printf "  %-16s %3d skills\n", $2, $1}'
 else
-    # Filter by category
-    rg -i "	$CAT	" ~/.claude/skills.idx | awk -F'\t' '{printf "  /%s — %s\n", $1, $3}'
+  COUNT=$(rg -ic "\t${CAT}\t" "$IDX" 2>/dev/null || echo 0)
+  echo "=== $CAT ($COUNT skills) ==="
+  rg -i "\t${CAT}\t" "$IDX" 2>/dev/null | \
+    awk -F'\t' '{printf "  /%-30s %s\n", $1, $3}' | head -50
 fi
 ```
 
 ---
 
-### `auto <intent>` — Find best skill for an intent, then invoke it
+### `auto <intent>` — Find best skill and invoke it
 
-1. Run grep search on intent
-2. If ≥1 match with confidence > 80%: output the skill name and say "Invoking /skill-name"
-3. If multiple candidates: list top 5 and ask which one
+1. `rg -i` on intent (searches name + desc in idx)
+2. Score: exact name > prefix > desc keyword > semantic
+3. 1 clear winner → invoke via Skill tool
+4. Multiple candidates → show top 5, ask
 
 ```bash
 INTENT="${ARGUMENTS#auto }"
-echo "Finding best skill for: $INTENT"
-MATCHES=$(rg -i "$INTENT" ~/.claude/skills.idx | head -5)
+IDX="$HOME/.claude/skills.idx"
+echo "Searching for: $INTENT"
+MATCHES=$(rg -i "$INTENT" "$IDX" 2>/dev/null | head -5)
 echo "$MATCHES" | awk -F'\t' '{printf "  /%s — %s\n", $1, $3}'
 ```
 
-Then reason about which skill best matches the intent and invoke it via the Skill tool.
+If MATCHES is empty → use ctx_search:
+`mcp__context-mode__ctx_search` with `queries=["$INTENT"]` and `source="skills-catalog"`
+
+Then reason about best match and invoke via Skill tool.
 
 ---
 
-### `rebuild` — Rebuild index from scratch
+### `stats` — Portfolio + token savings overview
 
 ```bash
-python3 /tmp/build_skills_idx.py 2>/dev/null || python3 << 'PYEOF'
-import os, re
-from pathlib import Path
-from collections import defaultdict
+IDX="$HOME/.claude/skills.idx"
+TOTAL=$(wc -l < "$IDX" | tr -d ' ')
+CATS=$(awk -F'\t' '{print $2}' "$IDX" | sort -u | wc -l | tr -d ' ')
+IDX_BYTES=$(wc -c < "$IDX" | tr -d ' ')
 
-skills_dir = Path.home() / ".claude/skills"
-idx_path = Path.home() / ".claude/skills.idx"
-md_path = Path.home() / ".claude/skills-catalog.md"
-
-CATS = {
-    'gsd': 'GSD', 'opsx': 'OpenSpec', 'openspec': 'OpenSpec',
-    'rust': 'Lang', 'python': 'Lang', 'kotlin': 'Lang', 'swift': 'Lang',
-    'java': 'Lang', 'go-': 'Lang', 'golang': 'Lang', 'cpp': 'Lang',
-    'perl': 'Lang', 'django': 'Lang', 'laravel': 'Lang', 'spring': 'Lang',
-    'typescript': 'Lang', 'android': 'Lang',
-    'agent': 'Agents', 'browser': 'Agents', 'devfleet': 'Agents',
-    'orchestrat': 'Agents', 'autonomous': 'Agents',
-    'intel': 'Biz', 'revenue': 'Biz', 'thinkrich': 'Biz', 'market': 'Biz',
-    'outreach': 'Biz', 'revshare': 'Biz', 'daily': 'Biz', 'briefing': 'Biz',
-    'db': 'Data', 'knowledge': 'Data', 'postgres': 'Data',
-    'clickhouse': 'Data', 'database': 'Data', 'surreal': 'Data',
-    'docker': 'DevOps', 'deploy': 'DevOps', 'commit': 'DevOps',
-    'github': 'DevOps', 'pm2': 'DevOps',
-    'plan': 'PM', 'spec': 'PM', 'review': 'PM', 'tdd': 'PM',
-    'test': 'PM', 'verify': 'PM', 'plane': 'PM', 'debug': 'PM',
-    'ghost': 'Browser', 'scrape': 'Browser', 'crawl': 'Browser',
-    'video': 'Media', 'fal': 'Media', 'security': 'Security',
-}
-
-def get_cat(name):
-    n = name.lower()
-    for k, v in CATS.items():
-        if k in n:
-            return v
-    return 'Other'
-
-entries = defaultdict(list)
-seen = set()
-
-for f in sorted(skills_dir.rglob("*.md")):
-    try:
-        content = f.read_text(errors='ignore')
-        name, desc, model = None, "", "sonnet"
-        in_fm = False
-        for line in content.split('\n')[:30]:
-            s = line.strip()
-            if s == '---':
-                in_fm = not in_fm
-                continue
-            if in_fm:
-                if s.startswith('name:'):
-                    name = s.split(':', 1)[1].strip()
-                elif s.startswith('description:'):
-                    desc = s.split(':', 1)[1].strip()[:90]
-                elif s.startswith('model:'):
-                    model = s.split(':', 1)[1].strip()
-        if not name or name in seen:
-            continue
-        seen.add(name)
-        cat = get_cat(name)
-        entries[cat].append((name, desc, str(f)))
-    except:
-        pass
-
-# Write TSV index
-idx_lines = []
-for cat, skills in entries.items():
-    for name, desc, path in skills:
-        idx_lines.append(f"{name}\t{cat}\t{desc.replace(chr(9), ' ')}\t{path}")
-
-with open(idx_path, 'w') as fh:
-    fh.write('\n'.join(sorted(idx_lines)) + '\n')
-
-# Write markdown catalog
-md_lines = ["# Skills Catalog\n"]
-for cat in sorted(entries.keys()):
-    skills = sorted(entries[cat])
-    md_lines.append(f"\n## {cat} ({len(skills)} skills)\n")
-    for name, desc, path in skills:
-        md_lines.append(f"- `/{name}` — {desc}")
-
-with open(md_path, 'w') as fh:
-    fh.write('\n'.join(md_lines))
-
-total = sum(len(v) for v in entries.values())
-print(f"Rebuilt: {total} skills indexed")
-PYEOF
-echo "Done. Re-run /sm rebuild to also re-index ctx."
-```
-
-After rebuild, re-index for ctx_search:
-Use `mcp__context-mode__ctx_index` with `path: ~/.claude/skills-catalog.md` and `source: skills-catalog`
-
----
-
-### No args / `help` → Show summary + usage
-
-```bash
-TOTAL=$(wc -l < ~/.claude/skills.idx)
-echo "=== Skill Manager — $TOTAL skills available ==="
+echo "=== Skill Manager & Token Saver — Stats ==="
 echo ""
-echo "Commands:"
-echo "  /sm search <query>    — grep search (instant, 0 tokens)"
-echo "  /sm list [category]   — browse by category"
-echo "  /sm load <name>       — read full skill content"
-echo "  /sm auto <intent>     — find + invoke best match"
-echo "  /sm rebuild           — rebuild index from skills dir"
+printf "  %-20s %s\n" "Skills indexed:" "$TOTAL"
+printf "  %-20s %s\n" "Categories:" "$CATS"
+printf "  %-20s %s bytes\n" "Index size:" "$IDX_BYTES"
 echo ""
-echo "Categories:"
-awk -F'\t' '{print $2}' ~/.claude/skills.idx | sort | uniq -c | sort -rn | \
-    awk '{printf "  %-14s %3d\n", $2, $1}' | head -15
+echo "Token Saving Layers:"
+printf "  %-28s %s\n" "rg on idx (Layer 1):" "~0 tokens, <20ms"
+printf "  %-28s %s\n" "ctx_search (Layer 2):" "~200-500 tokens, BM25"
+printf "  %-28s %s\n" "Read one skill (Layer 3):" "~500-5K tokens"
+printf "  %-28s %s\n" "All skills loaded:" "~160K+ (NEVER)"
 echo ""
-echo "Index: ~/.claude/skills.idx ($(wc -c < ~/.claude/skills.idx | tr -d ' ') bytes)"
-echo "Ctx:   skills-catalog (indexed, use ctx_search for semantic lookup)"
+echo "RTK Savings (this session):"
+rtk gain 2>/dev/null | grep -E "Tokens saved|Efficiency meter" | sed 's/^/  /' || echo "  rtk gain — check savings"
 ```
 
 ---
 
-## How Claude Should Use This
+### `tokens` — Token saving cheatsheet
 
-When you (Claude) need to find a skill:
+```bash
+echo "=== Token Saving Cheatsheet ==="
+echo ""
+echo "SKILL DISCOVERY (this manager)"
+echo "  /sm search <q>       ~0 tokens    rg on 54KB index"
+echo "  /sm auto <intent>    ~0-500       grep + optional ctx_search"
+echo "  /sm load <name>      ~500-5K      one skill on demand"
+echo ""
+echo "RTK — CLI COMPRESSION  (60-90% per command)"
+echo "  Hooks auto-rewrite: git, grep, ls, curl, find, docker, gh..."
+echo "  rtk gain             show total savings"
+echo "  rtk discover -a      find missed opportunities"
+echo ""
+echo "CONTEXT-MODE — LARGE OUTPUT VIRTUALIZATION"
+echo "  ctx_batch_execute    run N queries in 1 call"
+echo "  ctx_index + search   index large files, avoid loading them"
+echo "  ctx_search           ~200 tokens vs reading the file"
+echo ""
+echo "STRATEGIC COMPACT"
+echo "  /compact             after milestones — reset context pressure"
+echo "  What survives:       CLAUDE.md, Memory files, git state"
+echo ""
+echo "MODEL ROUTING"
+echo "  haiku:  search, explore, simple tasks  (\$1/\$5 per M)"
+echo "  sonnet: code, planning, complex tasks  (\$3/\$15 per M)"
+echo "  opus:   architecture decisions only    (\$5/\$25 per M)"
+```
 
-1. **Known name** → invoke directly via Skill tool: `Skill("agent-browser")`
-2. **Unknown/fuzzy** → `rg -i "keyword" ~/.claude/skills.idx | head -10`
-3. **Semantic/vague** → `ctx_search(queries=["intent"], source="skills-catalog")`
-4. **Load content** → `Read(skill_path)` where path = 4th column from idx
+---
 
-**Never** scan all 320 skill files. Always grep the index first.
+### `rebuild` — Regenerate index from skills dir
 
-## Token Budget
+```bash
+SCRIPT="$HOME/.claude/scripts/build-skills-index.py"
+if [ -f "$SCRIPT" ]; then
+  echo "Rebuilding skills index..."
+  python3 "$SCRIPT"
+  echo ""
+  echo "Re-indexing catalog for ctx_search..."
+  # ctx_index will be called after this block
+else
+  echo "Build script missing. Reinstall:"
+  echo "  curl -fsSL https://raw.githubusercontent.com/Supersynergy/claude-sm/main/install.sh | bash"
+fi
+```
 
-| Method | Tokens consumed |
-|--------|----------------|
-| Grep idx | ~0 (result only) |
-| ctx_search | ~200-500 (snippets only, content stays in db) |
-| Read one skill | ~500-5000 (that skill only) |
-| All skills loaded | ~160,000 (avoid!) |
+After rebuild, call `mcp__context-mode__ctx_index` with:
+- `path: ~/.claude/skills-catalog.md`
+- `source: skills-catalog`
+
+---
+
+### No args → Help
+
+```bash
+IDX="$HOME/.claude/skills.idx"
+[ ! -f "$IDX" ] && echo "Index not found. Run: python3 ~/.claude/scripts/build-skills-index.py" && exit 0
+TOTAL=$(wc -l < "$IDX" | tr -d ' ')
+BYTES=$(wc -c < "$IDX" | tr -d ' ')
+
+echo "=== Claude Skill Manager & Token Saver — $TOTAL skills ==="
+echo ""
+echo "  /sm search <query>    find by keyword  (~0 tokens)"
+echo "  /sm list [category]   browse portfolio"
+echo "  /sm load <name>       read full skill"
+echo "  /sm auto <intent>     find + invoke best match"
+echo "  /sm stats             portfolio + RTK savings overview"
+echo "  /sm tokens            token saving tips"
+echo "  /sm rebuild           refresh index"
+echo ""
+echo "Top categories:"
+awk -F'\t' '{print $2}' "$IDX" | sort | uniq -c | sort -rn | head -8 | \
+  awk '{printf "  %-16s %3d skills\n", $2, $1}'
+echo ""
+echo "Index: ~/.claude/skills.idx ($BYTES bytes) | Tip: /sm auto <describe what you need>"
+```
+
+---
+
+## Token Budget Table
+
+| Method | Tokens | When |
+|--------|--------|------|
+| `rg` on idx | **~0** | exact/keyword search |
+| `ctx_search` | ~200-500 | semantic/fuzzy |
+| `Read` one skill | ~500-5K | loading content |
+| All skills loaded | ~160K | **never do this** |
