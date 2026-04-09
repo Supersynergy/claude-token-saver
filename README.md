@@ -1,243 +1,381 @@
 ```
  ██████╗████████╗███████╗
 ██╔════╝╚══██╔══╝██╔════╝
-██║        ██║   ███████╗   Claude Token Saver
-██║        ██║   ╚════██║   60-90% less tokens. Every session.
-╚██████╗   ██║   ███████║   Zero-waste startup. Full vault system.
+██║        ██║   ███████╗   Universal Agent Token Saver
+██║        ██║   ╚════██║   ⚡ Speed or 💰 Savings — Adaptive.
+╚██████╗   ██║   ███████║   Every CLI. Every Model.
  ╚═════╝   ╚═╝   ╚══════╝
 ```
 
-**One command. Saves millions of tokens.**
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/Supersynergy/claude-token-saver/main/install.sh | bash
-```
-
----
-
-## The Problem
-
-Every Claude Code session loads tokens you don't need:
-
-| What loads | Tokens wasted |
-|-----------|--------------|
-| 100+ skill stubs in `commands/` | ~3,000 |
-| 50 agent stubs in `agents/` | ~2,500 |
-| 10 `rules/common/` files | ~2,800 |
-| `CLAUDE.md` with embedded docs | ~5,000 |
-| `toolstack-2026.md` via @import | ~4,900 |
-| Broken hooks firing on every call | wasted compute |
-| LSP plugins loaded globally | ~200 |
-| **Total wasted startup** | **~18,000 tokens** |
-
-CTS fixes all of this. Automatically.
-
----
-
-## What CTS Does
-
-### Layer 0: Vault (0 startup tokens)
-All skills, commands, and agents move to `~/.claude/cts/` — cold storage. Zero tokens at startup. Load any of 300+ skills on demand in milliseconds via `/cts search`.
-
-### Layer 1: `/cts` — Smart Skill Manager
-Single skill file (~50 tokens). Grep-based index search. Semantic fallback via context-mode.
-
-```
-/cts search browser      →  instant grep, 0 tokens
-/cts load agent-browser  →  loads one skill (~500-5K tokens)
-/cts auto "scrape site"  →  finds + invokes best match
-/cts stats               →  savings dashboard
-```
-
-### Layer 2: RTK — Bash Token Compression
-Auto-rewrites all Bash commands via PreToolUse hook. 60-90% savings on every CLI call.
-
-```bash
-rtk gain          # savings dashboard
-rtk discover -a   # find missed opportunities
-```
-
-### Layer 3: context-mode — Multi-command Batching
-`ctx_batch_execute` replaces 30+ separate Bash/Read calls with 1 sandboxed call.
-
-```python
-# ❌ 5 calls = ~2,500 tokens overhead
-# ✅ 1 ctx_batch_execute = ~300 tokens total
-```
-
-### Layer 4: Rules Minimization
-10 `rules/common/` files (2.8k tokens) → 1 `rules/core.md` (150 tokens). Full rules moved to `~/.claude/refs/rules/` — accessible on demand.
-
----
-
-## Install
-
-```bash
-# Full install (with backup)
-curl -fsSL https://raw.githubusercontent.com/Supersynergy/claude-token-saver/main/install.sh | bash
-
-# Audit what's wasting tokens (read-only)
-bash install.sh --audit
-
-# Dry run (preview changes)
-bash install.sh --dry-run
-
-# Backup only
-bash install.sh --backup-only
-
-# Upgrade to latest CTS
-bash install.sh --upgrade
-```
-
-**Rollback anytime:** `bash ~/.cts-backup-YYYYMMDD-HHMMSS/restore.sh`
-
----
-
-## What Gets Migrated
-
-| Before | After | Savings |
-|--------|-------|---------|
-| `~/.claude/commands/*.md` (100+ stubs) | `~/.claude/cts/commands/` | ~3k tokens |
-| `~/.claude/agents/*.md` (50 stubs) | `~/.claude/cts/agents/` | ~2.5k tokens |
-| `~/.claude/skills-vault/` | `~/.claude/cts/` (renamed) | seamless |
-| `~/.claude/rules/common/*.md` | `~/.claude/refs/rules/` | ~2.8k tokens |
-| `toolstack-2026.md` (auto-loaded) | `~/.claude/refs/` | ~4.9k tokens |
-| Broken `CLAUDE_PLUGIN_ROOT` hooks | Removed | no more errors |
-| Global LSP plugins | Disabled (use per-project) | ~200 tokens |
-
-**Total: 18k → ~4k tokens at startup**
-
----
-
-## CTS Vault Structure
-
-```
-~/.claude/cts/
-├── commands/       ← all command skills (was ~/.claude/commands/)
-├── agents/         ← all agent definitions (was ~/.claude/agents/)
-├── <skill-name>/   ← vault skills (SKILL.md format)
-└── ...             ← 300+ skills, 0 startup tokens
-```
-
-Everything searchable via `~/.claude/cts.idx` (TSV index, grep-able in <5ms).
-
----
-
-## Plugin Recommendations
-
-| Plugin | Keep? | Reason |
-|--------|-------|--------|
-| `claude-hud` | ✅ Yes | Lightweight HUD, ~50 tokens |
-| `claude-mem` | ✅ Yes | Memory system, useful |
-| `minimal-claude` | ✅ Yes | 7 tiny stubs, ~200 tokens |
-| `pyright-lsp` | ⚠️ Per-project | Disable globally, enable in Python projects |
-| `rust-analyzer-lsp` | ⚠️ Per-project | Disable globally, enable in Rust projects |
-| GSD plugin | ⚠️ Your choice | ~2500 tokens for /gsd:* skills |
-
-Enable LSP per-project: add `"enabledPlugins": {"pyright-lsp@claude-plugins-official": true}` to project's `.claude/settings.json`.
-
----
-
-## Auto-Update
-
-CTS checks for updates on every install run. To update:
-
-```bash
-bash install.sh --upgrade
-```
-
-Or add to your workflow: the install script is always safe to re-run (idempotent + auto-backup).
-
----
-
-## Requirements
-
-- Claude Code ≥ 2.0
-- Python 3.8+
-- macOS / Linux / WSL
-- Optional: RTK (`brew install rtk-ai/tap/rtk`), shellfirm (`brew install shellfirm`)
-
----
-
-## Token Math
-
-```
-Before CTS:  ~35,000 tokens/session startup overhead
-After CTS:   ~4,000  tokens/session startup overhead
-Savings:     ~31,000 tokens/session
-
-At 1,000 sessions/month:  31M tokens saved
-At Sonnet pricing ($3/1M): ~$93/month saved
-At Opus pricing  ($5/1M):  ~$155/month saved
-```
-
----
-
-**Made with obsession for token efficiency.**
-`github.com/Supersynergy/claude-token-saver`
-
----
-
-## ⚡ Universal Token Saver — All Coding Agents
-
-> Same savings. Every CLI. Every model.
+**The right model for every task. Every CLI. Every budget.**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/Supersynergy/universal-token-saver/main/install-universal.sh | bash
 ```
 
-### Supported CLI Agents
+---
 
-| Agent | Icon | Tracking | Savings |
-|-------|------|----------|---------|
-| **Claude Code** | 🦙 | `.claude/projects/` | ✅ 60-90% |
-| **Gemini CLI** | ✨ | `.gemini/tmp/` | ✅ 60-90% |
-| **Kilo/Code** | ⚡ | `opencode.db` | ✅ 60-90% |
-| **OpenCode** | ⚡ | `opencode.db` | ✅ 60-90% |
-| **Codex CLI** | 🔮 | `.codex/sessions/` | ✅ 60-90% |
-| **Kimi Code** | 🌙 | Agent Tracing | ✅ 60-90% |
-| **OpenClaw** | 🦞 | `.openclaw/` | ✅ 60-90% |
-| **Hermes** | 🤖 | `state.db` | ✅ 60-90% |
+## The Core Insight
 
-### Architecture
+```
+💰 Claude Opus:   $15/M tokens  → Token-Sparmaßnahmen LOHNEN sich
+⚡ MiniMax M2.7:  $0.05/M tokens → Token-Sparmaßnahmen KOSTEN Zeit
+```
+
+**Bei schnellen, günstigen APIs** → Geschwindigkeit vor Effizienz
+**Bei teuren APIs** → Volle Token-Optimierung aktivieren
+
+---
+
+## Adaptive Model Selection
+
+Wähle das optimale Modell basierend auf:
+
+| Factor | Decision |
+|--------|----------|
+| API-Key/Provider | MiniMax = ⚡ Speed, Claude = 💰 Savings |
+| Task-Komplexität | Simple → Fast, Complex → Smart |
+| Geschwindigkeitsanforderung | High → Schnellster Provider |
+| Code-Qualität | Draft → Schnell, Production → Qualität |
+
+---
+
+## Provider Comparison
+
+| Provider | Model | Speed | Cost/M | Token Savings | Best For |
+|----------|-------|-------|--------|--------------|----------|
+| **MiniMax** | M2.7 | ⚡⚡⚡⚡⚡ | $0.05 | **Keine nötig** | High-Volume, Speed |
+| **Google** | Gemini 3 Flash | ⚡⚡⚡⚡ | $0.07 | Minimal | Quick Tasks |
+| **Google** | Gemini 3 Pro | ⚡⚡⚡ | $1.00 | 60% | Complex Reasoning |
+| **Anthropic** | Claude 3.5 Sonnet | ⚡⚡⚡ | $3.00 | **60-90%** | Production Code |
+| **Anthropic** | Claude 3.5 Opus | ⚡⚡ | $15.00 | **60-90%** | Architecture |
+| **OpenAI** | GPT-4o | ⚡⚡⚡ | $2.50 | **60-90%** | General Tasks |
+| **Moonshot** | Kimi K2.5 | ⚡⚡⚡⚡ | $0.50 | Minimal | Code Generation |
+| **DeepSeek** | Coder | ⚡⚡⚡⚡ | $0.14 | Minimal | Code Completion |
+
+---
+
+## Supported CLI Agents
+
+> Same savings. Every CLI. Every model.
+
+| Agent | Icon | Config Path | Optimization |
+|-------|------|------------|--------------|
+| **Claude Code** | 🦙 | `~/.claude/` | Full (expensive) |
+| **Gemini CLI** | ✨ | `~/.gemini/` | Minimal (fast) |
+| **Kilo/Code** | ⚡ | `~/.local/share/kilo/` | Minimal |
+| **OpenCode** | ⚡ | `~/.local/share/opencode/` | Minimal |
+| **Codex CLI** | 🔮 | `~/.codex/` | Full (expensive) |
+| **Kimi Code** | 🌙 | `~/.kimi/` | Minimal |
+| **OpenClaw** | 🦞 | `~/.openclaw/` | Full |
+| **Hermes** | 🤖 | `$HERMES_HOME/` | Full |
+
+---
+
+## Quick Start
+
+### 1. Install (Auto-Detection)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Supersynergy/universal-token-saver/main/install-universal.sh | bash
+```
+
+### 2. Check Your Model
+
+```bash
+uts check
+# Output:
+# {
+#   "model": "minimax-m2.7",
+#   "provider": "MiniMax",
+#   "enableTokenSavings": false,
+#   "reason": "Fast provider - no token savings needed"
+# }
+```
+
+### 3. Adaptive Select
+
+```bash
+# Quick task → Fastest model
+uts select simple fastest
+
+# Production code → Best quality
+uts select complex balanced 50000 production
+
+# Exploration → Fast + cheap
+uts select simple fast 10000 draft
+```
+
+---
+
+## Core Features
+
+### ⚡ Adaptive Model Selection
+
+```
+┌─────────────────────────────────────────────────────────┐
+│  Task gestartet                                         │
+│      │                                                  │
+│      ├─→ Speed = "fastest"?                            │
+│      │       └─→ YES → MiniMax M2.7 ⚡                │
+│      │                                                  │
+│      ├─→ Code Quality = "production"?                  │
+│      │       └─→ YES → Claude 3.5 Sonnet 💰           │
+│      │                                                  │
+│      ├─→ Complexity = "complex"?                       │
+│      │       └─→ YES → Claude 3.5 Opus 💰             │
+│      │                                                  │
+│      └─→ Default → Gemini 3 Flash ⚡                   │
+└─────────────────────────────────────────────────────────┘
+```
+
+### 💰 Provider-Based Token Savings
+
+| Provider | Strategy | Why |
+|----------|----------|-----|
+| MiniMax | **None** | $0.05/M = billig, Geschwindigkeit > Effizienz |
+| Google | Minimal | $0.07-1.25/M = moderat |
+| Anthropic | **Full** | $3-15/M = teuer, Token-Sparen lohnt sich |
+| OpenAI | **Full** | $2.50-75/M = teuer, Token-Sparen lohnt sich |
+
+### 🔧 Multi-CLI Vault System
+
+```
+~/.uts/vault/
+├── skills/           # Universal skills (CLI-agnostisch)
+├── commands/         # CLI-spezifische Commands
+└── adapters/        # Einer pro CLI-Tool
+    ├── claude.js
+    ├── gemini.js
+    ├── kilo.js
+    └── codex.js
+```
+
+---
+
+## `/uts` Commands
+
+| Command | Description |
+|---------|-------------|
+| `/uts check` | Prüfe aktuelles Modell & Strategie |
+| `/uts select` | Adaptives Model Selection |
+| `/uts strategy` | Zeige Provider-Strategie |
+| `/uts list` | Alle verfügbaren Modelle |
+| `/uts agents` | Zeige installierte CLI-Agenten |
+| `/uts install` | UTS für CLI installieren |
+| `/uts dashboard` | Multi-Agent Token Dashboard |
+| `/uts upgrade` | Update auf latest |
+
+---
+
+## RTK Universal — 60-90% CLI Compression
+
+> Für teure APIs (Claude, OpenAI) — optional für schnelle APIs
+
+### Automatic Hook
+
+```bash
+# RTK Universal erkennt den aktiven CLI automatisch
+rtk-universal install     # Installiert Hook
+rtk-universal wrap <cmd>  # Einzelne Command komprimieren
+rtk-universal stats       # Savings anzeigen
+```
+
+### Command Mapping
+
+| Original | RTK Compressed | Savings |
+|----------|---------------|---------|
+| `git status` | `git status -sb` | 60% |
+| `git log` | `git log --oneline` | 75% |
+| `ls -la` | `ls -1` | 80% |
+| `pytest -v` | `pytest -q --tb=short` | 85% |
+| `npm install` | `npm install --silent` | 90% |
+| `cargo test` | `cargo test --message-format=short` | 80% |
+
+### Output Filter
+
+| CLI | Noise Removed | Savings |
+|-----|---------------|---------|
+| git | Merging, fast-forward, remote: | 70% |
+| npm | `added X packages`, warnings | 85% |
+| pytest | `passed X tests`, platform info | 85% |
+| docker | `Pulling from layer`, Digest | 90% |
+
+---
+
+## Installation
+
+### Auto-Detection + Full Install
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Supersynergy/universal-token-saver/main/install-universal.sh | bash
+```
+
+### CLI-Specific
+
+```bash
+# Nur Gemini CLI
+curl -fsSL ... | bash -s -- --adapter=gemini
+
+# Nur Claude Code
+curl -fsSL ... | bash -s -- --adapter=claude
+
+# Alle CLIs
+curl -fsSL ... | bash -s -- --adapter=all
+```
+
+### CLI-Commands
+
+```bash
+uts install          # Aktuellen CLI
+uts install gemini   # Spezifischen CLI
+uts uninstall        # UTS entfernen
+```
+
+---
+
+## Configuration
+
+### `~/.uts/config.json`
+
+```json
+{
+  "provider": "minimax",
+  "model": "minimax-m2.7",
+  "strategy": {
+    "tokenSavings": "none",
+    "cacheStrategy": "disabled",
+    "batchStrategy": "never"
+  },
+  "preferences": {
+    "preferSpeed": true,
+    "maxCostPerMonth": 100
+  }
+}
+```
+
+### Provider Strategies
+
+**MiniMax (Schnellster Provider)**
+```json
+{
+  "provider": "MiniMax",
+  "tokenSavings": "none",
+  "cacheStrategy": "disabled",
+  "batchStrategy": "never",
+  "recommendedModel": "minimax-m2.7"
+}
+```
+
+**Anthropic (Teuerste Option)**
+```json
+{
+  "provider": "Anthropic",
+  "tokenSavings": "full",
+  "cacheStrategy": "aggressive",
+  "batchStrategy": "always",
+  "recommendedModel": "claude-3.5-sonnet"
+}
+```
+
+---
+
+## Architecture
 
 ```
 universal-token-saver/
-├── core/                  # Adapter Interface + Filter Engine
-├── adapters/              # Ein Adapter pro CLI-Tool
-│   ├── claude-code.ts
-│   ├── gemini-cli.ts
-│   ├── kilo-code.ts
-│   ├── codex.ts
-│   └── kimi-cli.ts
-├── plugins/               # RTK + Output Filter
-└── cli/uts.ts            # Multi-Dashboard
+├── core/
+│   ├── adapter-interface.ts    # Universal Adapter Interface
+│   └── adaptive-model.ts       # Model Selection Logic
+├── adapters/
+│   ├── claude-code.ts          # Claude Code Adapter
+│   ├── gemini-cli.ts           # Gemini CLI Adapter
+│   ├── kilo-code.ts            # Kilo/Code + OpenCode
+│   ├── codex.ts               # Codex CLI Adapter
+│   ├── kimi-cli.ts            # Kimi Code Adapter
+│   └── index.ts               # Adapter Registry
+├── plugins/
+│   ├── output-filter.js       # 70-95% Noise Reduction
+│   └── rtk-universal.sh       # CLI Compression
+├── cli/
+│   └── uts-dashboard.ts      # Multi-Agent Dashboard
+├── UTS.md                     # /uts Skill Documentation
+└── install-universal.sh       # Universal Installer
 ```
 
-### Features
+---
 
-1. **Universal Vault** — 0 startup tokens for any CLI
-2. **RTK Universal** — 60-90% CLI compression (all CLIs)
-3. **Output Filter** — 70-95% noise reduction
-4. **Multi-Dashboard** — All agents in one view
-5. **Auto-Detection** — Detects active CLI automatically
+## Token Math
 
-### Quick Commands
+### Expensive API (Claude)
+
+```
+Before UTS:  ~35,000 tokens/session overhead
+After UTS:   ~4,000  tokens/session overhead
+Savings:     ~31,000 tokens/session
+
+At 1,000 sessions/month:  31M tokens saved
+At Sonnet pricing ($3/M):  ~$93/month saved
+At Opus pricing  ($15/M): ~$465/month saved
+```
+
+### Fast API (MiniMax)
+
+```
+Token-Sparmaßnahmen: NICHT AKTIVIERT
+Grund: $0.05/M tokens = Zeitverschwendung zu sparen
+
+Instead: Nutze MiniMax M2.7 für 300x günstigere Speed-Tasks
+```
+
+---
+
+## Decision Matrix
+
+| Task Type | Fast API | Expensive API |
+|-----------|----------|---------------|
+| Quick Fix | MiniMax M2.7 ⚡ | Claude Haiku 💰 |
+| Exploration | Gemini 3 Flash ⚡ | Claude Sonnet 💰 |
+| Code Generation | Kimi K2.5 ⚡ | Claude Sonnet 💰 |
+| Production | Gemini 3 Pro ⚡ | Claude Sonnet 💰 |
+| Architecture | Gemini 3 Pro ⚡ | Claude Opus 💰 |
+
+---
+
+## Requirements
+
+- Node.js ≥ 16
+- Python 3.8+ (optional, für Stats)
+- macOS / Linux / WSL
+- Einen oder mehr CLI Coding Agents installiert
+
+---
+
+## Upgrade
 
 ```bash
-uts dashboard     # Multi-agent token dashboard
-uts agents        # List detected CLIs
-uts stats         # Detailed stats
-uts install gemini # Install for specific CLI
-uts uninstall     # Remove UTS
+uts upgrade
+# oder
+curl -fsSL https://raw.githubusercontent.com/Supersynergy/universal-token-saver/main/install-universal.sh | bash
 ```
 
-### Comparison: Before vs After
+---
 
-```
-BEFORE: ~35K tokens/session startup (Claude)
-AFTER:  ~4K tokens/session startup
+## Rollback
 
-BEFORE: 100% CLI output sent to LLM
-AFTER:  10-30% filtered output (useful parts only)
+```bash
+bash ~/.uts-backup-YYYYMMDD-HHMMSS/restore.sh
 ```
+
+---
+
+## Links
+
+- **GitHub**: [github.com/Supersynergy/universal-token-saver](https://github.com/Supersynergy/universal-token-saver)
+- **Docs**: [UTS.md](./UTS.md)
+- **Best Practices**: [BEST_PRACTICES.md](./BEST_PRACTICES.md)
+
+---
+
+**Made with obsession for developer efficiency.**
+⚡ Speed or 💰 Savings — You Choose.

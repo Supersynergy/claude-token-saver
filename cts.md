@@ -1,11 +1,10 @@
 ---
 name: cts
 description: >-
-  Zero-token skill manager + full token-saving stack. Manages 300+ skills via
-  vault pattern (cold storage). Integrates RTK (60-90% CLI savings) +
-  context-mode v1.0.75 (98% context reduction, 10 tools). Auto-invokes when user
-  asks "what skill", "which command", "can you", "do you have a skill for", or
-  says "skills". Use / cts init at session start for extreme token savings.
+  Claude Token Saver — 60-90% token savings via vault pattern, RTK compression,
+  and context-mode. Now with Universal Token Saver (UTS) support for ALL CLI agents:
+  Claude Code, Gemini CLI, Kilo, Codex, Kimi. Adaptive model selection based on
+  provider speed/cost. Use / cts init for token optimization, / uts for adaptive model selection.
 argument-hint: "[init | search <q> | load <name> | list [cat] | auto <intent> | vault <name> | unvault <name> | stats | tokens | rebuild]"
 allowed-tools: [Bash, Read, mcp__context-mode__ctx_search, mcp__context-mode__ctx_index, mcp__context-mode__ctx_batch_execute, mcp__context-mode__ctx_execute, mcp__context-mode__ctx_execute_file, mcp__context-mode__ctx_fetch_and_index, mcp__context-mode__ctx_stats, mcp__context-mode__ctx_doctor, mcp__context-mode__ctx_upgrade, mcp__context-mode__ctx_purge]
 model: haiku
