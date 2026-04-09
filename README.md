@@ -1,16 +1,33 @@
 ```
- ██████╗████████╗███████╗
-██╔════╝╚══██╔══╝██╔════╝
-██║        ██║   ███████╗   Universal Agent Token Saver
-██║        ██║   ╚════██║   ⚡ Speed or 💰 Savings — Adaptive.
-╚██████╗   ██║   ███████║   Every CLI. Every Model.
- ╚═════╝   ╚═╝   ╚══════╝
+ ██████╗ ███████╗████████╗██████╗  ██████╗ 
+██╔════╝ ██╔════╝╚══██╔══╝██╔══██╗██╔═══██╗
+██║  ███╗█████╗     ██║   ██████╔╝██║   ██║
+██║   ██║██╔══╝     ██║   ██╔══██╗██║   ██║
+╚██████╔╝███████╗   ██║   ██║  ██║╚██████╔╝
+ ╚═════╝ ╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝ 
+
+████████╗███████╗██╗  ██╗████████╗██████╗  ██████╗ 
+╚══██╔══╝██╔════╝╚██╗██╔╝╚══██╔══╝██╔══██╗██╔═══██╗
+   ██║   █████╗   ╚███╔╝    ██║   ██████╔╝██║   ██║
+   ██║   ██╔══╝   ██╔██╗    ██║   ██╔══██╗██║   ██║
+   ██║   ███████╗██╔╝ ██╗   ██║   ██║  ██║╚██████╔╝
+   ╚═╝   ╚══════╝╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝ 
+
+ ██████╗ ██████╗ ███████╗██╗██████╗ ██╗ █████╗ ███╗   ██╗
+██╔═══██╗██╔══██╗██╔════╝██║██╔══██╗██║██╔══██╗████╗  ██║
+██║   ██║██████╔╝███████╗██║██║  ██║██║███████║██╔██╗ ██║
+██║   ██║██╔══██╗╚════██║██║██║  ██║██║██╔══██║██║╚██╗██║
+╚██████╔╝██████╔╝███████║██║██████╔╝██║██║  ██║██║ ╚████║
+ ╚═════╝ ╚═════╝ ╚══════╝╚═╝╚═════╝ ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝
+                                                              
+         ⚡ Speed or 💰 Savings — Adaptive.
+         Every CLI. Every Model. Every Budget.
 ```
 
 **The right model for every task. Every CLI. Every budget.**
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Supersynergy/universal-token-saver/main/install-universal.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Supersynergy/universal-agent-token-saver/main/install-universal.sh | bash
 ```
 
 ---
@@ -77,7 +94,7 @@ Wähle das optimale Modell basierend auf:
 ### 1. Install (Auto-Detection)
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Supersynergy/universal-token-saver/main/install-universal.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Supersynergy/universal-agent-token-saver/main/install-universal.sh | bash
 ```
 
 ### 2. Check Your Model
@@ -208,7 +225,7 @@ rtk-universal stats       # Savings anzeigen
 ### Auto-Detection + Full Install
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Supersynergy/universal-token-saver/main/install-universal.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Supersynergy/universal-agent-token-saver/main/install-universal.sh | bash
 ```
 
 ### CLI-Specific
@@ -283,7 +300,7 @@ uts uninstall        # UTS entfernen
 ## Architecture
 
 ```
-universal-token-saver/
+universal-agent-token-saver/
 ├── core/
 │   ├── adapter-interface.ts    # Universal Adapter Interface
 │   └── adaptive-model.ts       # Model Selection Logic
@@ -356,7 +373,7 @@ Instead: Nutze MiniMax M2.7 für 300x günstigere Speed-Tasks
 ```bash
 uts upgrade
 # oder
-curl -fsSL https://raw.githubusercontent.com/Supersynergy/universal-token-saver/main/install-universal.sh | bash
+curl -fsSL https://raw.githubusercontent.com/Supersynergy/universal-agent-token-saver/main/install-universal.sh | bash
 ```
 
 ---
@@ -371,11 +388,56 @@ bash ~/.uts-backup-YYYYMMDD-HHMMSS/restore.sh
 
 ## Links
 
-- **GitHub**: [github.com/Supersynergy/universal-token-saver](https://github.com/Supersynergy/universal-token-saver)
+- **GitHub**: [github.com/Supersynergy/universal-agent-token-saver](https://github.com/Supersynergy/universal-agent-token-saver)
 - **Docs**: [UTS.md](./UTS.md)
 - **Best Practices**: [BEST_PRACTICES.md](./BEST_PRACTICES.md)
 
 ---
 
+## 🙏 Acknowledgments
+
+This project stands on the shoulders of giants. Special thanks to:
+
+### Core Technologies We Built Upon
+
+| Project | Thanks To | URL |
+|---------|----------|-----|
+| **RTK (Rust Token Killer)** | 60-90% CLI compression | [rtk-ai.app](https://rtk-ai.app) |
+| **context-mode** | 98% context reduction, 10 tools | MCP Server |
+| **shellfirm** | Destructive command protection | [shellfirm](https://github.com/rot constant/shellfirm) |
+| **claude-hud** | Token HUD display | Claude Plugins |
+| **claude-mem** | Memory system | Claude Plugins |
+
+### CLI Agents We Support
+
+| Agent | Maintainer | Note |
+|-------|------------|------|
+| **Claude Code** | Anthropic | Primary target |
+| **Gemini CLI** | Google | OpenTelemetry support |
+| **Kilo/Code** | Kilo Org | #1 on OpenRouter |
+| **OpenCode** | Open Source | MIT Licensed |
+| **Codex CLI** | OpenAI | Rust-based |
+| **Kimi Code** | Moonshot AI | Agent Tracing |
+| **OpenClaw** | Community | Clawdbot/Moltbot |
+| **Hermes** | Community | SQLite-based |
+
+### Inspiration & Ideas
+
+| Project | Concept |
+|---------|---------|
+| **Tokscale** | Multi-agent token tracking |
+| **token-saver.ai** | Output compression |
+| **OpenCode Monitor** | Real-time analytics |
+| **portkey.ai** | Model governance |
+
+### The Community
+
+- All contributors to the AI coding agent ecosystem
+- Everyone who shares token-saving tips
+- The developers building these amazing tools
+
+---
+
 **Made with obsession for developer efficiency.**
 ⚡ Speed or 💰 Savings — You Choose.
+**Universal Agent Token Saver** — *Every CLI. Every Model.*

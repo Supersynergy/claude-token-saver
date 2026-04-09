@@ -1,7 +1,7 @@
 {
-  "name": "universal-token-saver",
+  "name": "universal-agent-token-saver",
   "version": "1.0.0",
-  "description": "60-90% token savings for ALL CLI coding agents: Claude Code, Gemini CLI, Kilo, Codex, Kimi",
+  "description": "⚡ Speed or 💰 Savings — Adaptive Model Selection + Token Optimization for ALL CLI Coding Agents. Supports Claude Code, Gemini CLI, Kilo, Codex, Kimi, OpenCode and more.",
   "main": "core/adapter-interface.js",
   "bin": {
     "uts": "cli/uts-dashboard.js",
@@ -13,14 +13,27 @@
     "install": "bash install-universal.sh"
   },
   "keywords": [
-    "token-saver",
+    "universal-agent-token-saver",
+    "adaptive-model-selection",
+    "multi-cli-agent",
+    "token-optimization",
+    "ai-coding-agent",
     "claude-code",
     "gemini-cli",
-    "kilo",
-    "codex",
-    "ai-coding",
-    "cli",
-    "cost-optimization"
+    "kilo-code",
+    "opencode",
+    "codex-cli",
+    "kimi-code",
+    "openclaw",
+    "cost-optimization",
+    "rtk",
+    "cli-compression",
+    "output-filter",
+    "model-routing",
+    "anthropic",
+    "openai",
+    "google-gemini",
+    "minimax"
   ],
   "author": "Supersynergy",
   "license": "MIT",
@@ -32,5 +45,13 @@
   },
   "optionalDependencies": {
     "better-sqlite3": "^9.0.0"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Supersynergy/universal-agent-token-saver"
+  },
+  "bugs": {
+    "url": "https://github.com/Supersynergy/universal-agent-token-saver/issues"
+  },
+  "homepage": "https://github.com/Supersynergy/universal-agent-token-saver#readme"
 }
