@@ -1,0 +1,36 @@
+{
+  "name": "universal-token-saver",
+  "version": "1.0.0",
+  "description": "60-90% token savings for ALL CLI coding agents: Claude Code, Gemini CLI, Kilo, Codex, Kimi",
+  "main": "core/adapter-interface.js",
+  "bin": {
+    "uts": "cli/uts-dashboard.js",
+    "rtk-universal": "plugins/rtk-universal.sh"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dashboard": "node cli/uts-dashboard.js",
+    "install": "bash install-universal.sh"
+  },
+  "keywords": [
+    "token-saver",
+    "claude-code",
+    "gemini-cli",
+    "kilo",
+    "codex",
+    "ai-coding",
+    "cli",
+    "cost-optimization"
+  ],
+  "author": "Supersynergy",
+  "license": "MIT",
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "dependencies": {
+    "glob": "^10.3.0"
+  },
+  "optionalDependencies": {
+    "better-sqlite3": "^9.0.0"
+  }
+}

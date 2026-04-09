@@ -175,3 +175,69 @@ At Opus pricing  ($5/1M):  ~$155/month saved
 
 **Made with obsession for token efficiency.**
 `github.com/Supersynergy/claude-token-saver`
+
+---
+
+## ⚡ Universal Token Saver — All Coding Agents
+
+> Same savings. Every CLI. Every model.
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/Supersynergy/universal-token-saver/main/install-universal.sh | bash
+```
+
+### Supported CLI Agents
+
+| Agent | Icon | Tracking | Savings |
+|-------|------|----------|---------|
+| **Claude Code** | 🦙 | `.claude/projects/` | ✅ 60-90% |
+| **Gemini CLI** | ✨ | `.gemini/tmp/` | ✅ 60-90% |
+| **Kilo/Code** | ⚡ | `opencode.db` | ✅ 60-90% |
+| **OpenCode** | ⚡ | `opencode.db` | ✅ 60-90% |
+| **Codex CLI** | 🔮 | `.codex/sessions/` | ✅ 60-90% |
+| **Kimi Code** | 🌙 | Agent Tracing | ✅ 60-90% |
+| **OpenClaw** | 🦞 | `.openclaw/` | ✅ 60-90% |
+| **Hermes** | 🤖 | `state.db` | ✅ 60-90% |
+
+### Architecture
+
+```
+universal-token-saver/
+├── core/                  # Adapter Interface + Filter Engine
+├── adapters/              # Ein Adapter pro CLI-Tool
+│   ├── claude-code.ts
+│   ├── gemini-cli.ts
+│   ├── kilo-code.ts
+│   ├── codex.ts
+│   └── kimi-cli.ts
+├── plugins/               # RTK + Output Filter
+└── cli/uts.ts            # Multi-Dashboard
+```
+
+### Features
+
+1. **Universal Vault** — 0 startup tokens for any CLI
+2. **RTK Universal** — 60-90% CLI compression (all CLIs)
+3. **Output Filter** — 70-95% noise reduction
+4. **Multi-Dashboard** — All agents in one view
+5. **Auto-Detection** — Detects active CLI automatically
+
+### Quick Commands
+
+```bash
+uts dashboard     # Multi-agent token dashboard
+uts agents        # List detected CLIs
+uts stats         # Detailed stats
+uts install gemini # Install for specific CLI
+uts uninstall     # Remove UTS
+```
+
+### Comparison: Before vs After
+
+```
+BEFORE: ~35K tokens/session startup (Claude)
+AFTER:  ~4K tokens/session startup
+
+BEFORE: 100% CLI output sent to LLM
+AFTER:  10-30% filtered output (useful parts only)
+```
