@@ -64,9 +64,11 @@ def classify_with_catboost(text: str) -> dict:
     vec = [f[k] for k in FEATURES]
     pred = model.predict([vec])[0]
     proba = model.predict_proba([vec])[0]
-    categories = ["noise", "boilerplate", "signal", "error"]
-    idx = int(pred) if isinstance(pred, (int, float)) else categories.index(str(pred))
-    cat = categories[idx]
+    # catboost multiclass returns array-like ['label'], flatten to str
+    if hasattr(pred, "__len__") and not isinstance(pred, str):
+        cat = str(pred[0])
+    else:
+        cat = str(pred)
     return {
         "keep": cat in {"signal", "error"},
         "category": cat,

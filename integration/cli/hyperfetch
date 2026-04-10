@@ -16,17 +16,42 @@ TEAM_NS="${CTS_TEAM_NS:-default}"
 USE_CACHE=1
 SUMMARIZE=1
 OUT_MODE="json"
+MODE="summary"   # summary | markdown | extract | raw
+EXTRACT_PROMPT=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --stage) STAGE_CAP="$2"; shift 2 ;;
     --team-ns) TEAM_NS="$2"; shift 2 ;;
     --no-cache) USE_CACHE=0; shift ;;
-    --no-summary) SUMMARIZE=0; shift ;;
-    --summarize) SUMMARIZE=1; shift ;;
+    --no-summary) SUMMARIZE=0; MODE="raw"; shift ;;
+    --summarize) SUMMARIZE=1; MODE="summary"; shift ;;
+    --markdown) MODE="markdown"; SUMMARIZE=1; shift ;;
+    --extract) MODE="extract"; EXTRACT_PROMPT="$2"; SUMMARIZE=1; shift 2 ;;
     --json) OUT_MODE="json"; shift ;;
     -h|--help)
-      sed -n '3,13p' "$0"; exit 0 ;;
+      cat <<HELP
+hyperfetch — token-efficient web fetch with 4-stage escalation
+
+Usage:
+  hyperfetch <url> [flags]
+
+Flags:
+  --stage <s>           Cap escalation: curl_cffi|camoufox|domshell|browser
+  --team-ns <ns>        Cache namespace (default: \$CTS_TEAM_NS or 'default')
+  --no-cache            Force fresh fetch
+  --no-summary          Return raw body (no gemma gate)
+  --markdown            Gemma converts to clean Markdown instead of bullet summary
+  --extract "<prompt>"  Gemma extracts specific facts using your prompt
+                        e.g. --extract "price and stock"
+  --json                (default) single-line JSON output
+
+Environment:
+  CTS_GEMMA_MODEL       Ollama model (default: phi4-mini:latest)
+  CTS_GEMMA_THRESHOLD   Min tokens to trigger gemma (default: 200)
+  CTS_GEMMA_MAX_INPUT   Max chars into gemma (default: 4096)
+HELP
+      exit 0 ;;
     *) URL="$1"; shift ;;
   esac
 done
@@ -125,7 +150,16 @@ fi
 
 SUMMARY_BODY="$BODY"
 if [[ "$SUMMARIZE" == "1" && -x "$GEMMA" ]]; then
-  GEMMA_OUT=$(printf "%s" "$BODY" | head -c 131072 | "$HOME/.cts/venv/bin/python" "$GEMMA" --summarize 2>/dev/null || true)
+  case "$MODE" in
+    markdown) GEMMA_FLAG="--markdown" ;;
+    extract)  GEMMA_FLAG="--extract" ;;
+    *)        GEMMA_FLAG="--summarize" ;;
+  esac
+  if [[ "$MODE" == "extract" ]]; then
+    GEMMA_OUT=$(printf "%s" "$BODY" | head -c 131072 | "$HOME/.cts/venv/bin/python" "$GEMMA" --extract "$EXTRACT_PROMPT" 2>/dev/null || true)
+  else
+    GEMMA_OUT=$(printf "%s" "$BODY" | head -c 131072 | "$HOME/.cts/venv/bin/python" "$GEMMA" "$GEMMA_FLAG" 2>/dev/null || true)
+  fi
   if [[ -n "$GEMMA_OUT" ]]; then
     SUMMARY_BODY="$GEMMA_OUT"
   fi
