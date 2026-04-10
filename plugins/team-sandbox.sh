@@ -1,127 +1,160 @@
 #!/usr/bin/env bash
-# team-sandbox: shared context-mode sandbox backed by SurrealDB.
-# Enables multi-dev Claude teams to dedupe scraped output across sessions.
-# Uses ~/.claude/toolstack.db as single source of truth.
+# team-sandbox: shared hyperstack cache backed by SQLite + FTS5.
+# Zero-setup (built-in macOS sqlite3), no port conflicts, no auth.
+# Enables multi-dev Claude teams to dedupe scraped output.
 
 set -euo pipefail
 
-SDB_FILE="${HOME}/.claude/toolstack.db"
-SDB_NS="${CTS_TEAM_NS:-default}"
-SDB_DB="${CTS_TEAM_DB:-hyperstack}"
-CACHE_DIR="${HOME}/.cts/hyperstack"
+DB="${CTS_TEAM_DB_PATH:-${HOME}/.cts/hyperstack.db}"
+NS="${CTS_TEAM_NS:-default}"
 
-require_surreal() {
-  if ! command -v surreal >/dev/null 2>&1; then
-    echo "surreal not installed. install: curl -sSf https://install.surrealdb.com | sh" >&2
-    exit 1
-  fi
-}
+mkdir -p "$(dirname "$DB")"
 
-init_schema() {
-  require_surreal
-  surreal sql --conn "file://${SDB_FILE}" --ns "${SDB_NS}" --db "${SDB_DB}" --pretty <<'SQL'
-DEFINE TABLE IF NOT EXISTS fetch SCHEMAFULL;
-DEFINE FIELD IF NOT EXISTS url ON fetch TYPE string;
-DEFINE FIELD IF NOT EXISTS content_hash ON fetch TYPE string;
-DEFINE FIELD IF NOT EXISTS stage ON fetch TYPE string;
-DEFINE FIELD IF NOT EXISTS bytes ON fetch TYPE int;
-DEFINE FIELD IF NOT EXISTS token_estimate ON fetch TYPE int;
-DEFINE FIELD IF NOT EXISTS summary ON fetch TYPE option<string>;
-DEFINE FIELD IF NOT EXISTS team_ns ON fetch TYPE string;
-DEFINE FIELD IF NOT EXISTS fetched_at ON fetch TYPE datetime DEFAULT time::now();
-DEFINE FIELD IF NOT EXISTS fetched_by ON fetch TYPE string;
-DEFINE INDEX IF NOT EXISTS fetch_url_ns ON fetch FIELDS url, team_ns UNIQUE;
-DEFINE INDEX IF NOT EXISTS fetch_hash ON fetch FIELDS content_hash;
+sqlite_init() {
+  sqlite3 "$DB" <<'SQL'
+CREATE TABLE IF NOT EXISTS fetch (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  url TEXT NOT NULL,
+  team_ns TEXT NOT NULL,
+  content_hash TEXT NOT NULL,
+  stage TEXT NOT NULL,
+  bytes INTEGER NOT NULL DEFAULT 0,
+  token_estimate INTEGER NOT NULL DEFAULT 0,
+  summary TEXT,
+  fetched_at INTEGER NOT NULL DEFAULT (strftime('%s','now')),
+  fetched_by TEXT NOT NULL DEFAULT 'unknown',
+  UNIQUE(url, team_ns)
+);
+CREATE INDEX IF NOT EXISTS idx_fetch_ns ON fetch(team_ns, fetched_at DESC);
+CREATE INDEX IF NOT EXISTS idx_fetch_hash ON fetch(content_hash);
 
-DEFINE TABLE IF NOT EXISTS agent_event SCHEMAFULL;
-DEFINE FIELD IF NOT EXISTS agent_id ON agent_event TYPE string;
-DEFINE FIELD IF NOT EXISTS event_type ON agent_event TYPE string;
-DEFINE FIELD IF NOT EXISTS payload ON agent_event TYPE object;
-DEFINE FIELD IF NOT EXISTS team_ns ON agent_event TYPE string;
-DEFINE FIELD IF NOT EXISTS ts ON agent_event TYPE datetime DEFAULT time::now();
-DEFINE INDEX IF NOT EXISTS agent_event_ns ON agent_event FIELDS team_ns, ts;
+CREATE TABLE IF NOT EXISTS agent_event (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  agent_id TEXT NOT NULL,
+  event_type TEXT NOT NULL,
+  payload TEXT,
+  team_ns TEXT NOT NULL,
+  ts INTEGER NOT NULL DEFAULT (strftime('%s','now'))
+);
+CREATE INDEX IF NOT EXISTS idx_event_ns_ts ON agent_event(team_ns, ts DESC);
+
+CREATE VIRTUAL TABLE IF NOT EXISTS fetch_fts USING fts5(url, summary);
 SQL
-  echo "[team-sandbox] schema initialized at ${SDB_FILE} (${SDB_NS}/${SDB_DB})"
+  echo "[team-sandbox] initialized: $DB"
 }
+
+sq_esc() { printf "%s" "$1" | sed "s/'/''/g"; }
 
 lookup() {
-  local url="$1"
-  surreal sql --conn "file://${SDB_FILE}" --ns "${SDB_NS}" --db "${SDB_DB}" --json <<SQL
-SELECT * FROM fetch WHERE url = '${url}' AND team_ns = '${SDB_NS}' LIMIT 1;
-SQL
+  local url; url=$(sq_esc "$1")
+  local max_age="${2:-3600}"
+  sqlite3 -json "$DB" "SELECT url, stage, bytes, token_estimate, summary, fetched_at, fetched_by
+    FROM fetch WHERE url='$url' AND team_ns='$(sq_esc "$NS")'
+    AND fetched_at > strftime('%s','now') - $max_age LIMIT 1;"
 }
 
 record() {
-  local url="$1" stage="$2" bytes="$3" hash="$4" tokens="$5" who="${USER:-unknown}"
-  surreal sql --conn "file://${SDB_FILE}" --ns "${SDB_NS}" --db "${SDB_DB}" --json <<SQL
-UPSERT fetch SET
-  url = '${url}',
-  content_hash = '${hash}',
-  stage = '${stage}',
-  bytes = ${bytes},
-  token_estimate = ${tokens},
-  team_ns = '${SDB_NS}',
-  fetched_by = '${who}',
-  fetched_at = time::now()
-WHERE url = '${url}' AND team_ns = '${SDB_NS}';
-SQL
+  local url; url=$(sq_esc "$1")
+  local stage; stage=$(sq_esc "$2")
+  local bytes="$3" hash; hash=$(sq_esc "$4")
+  local tokens="$5"
+  local summary="${6:-}"
+  summary=$(sq_esc "$summary")
+  local who; who=$(sq_esc "${USER:-unknown}")
+  sqlite3 "$DB" "INSERT INTO fetch(url, team_ns, content_hash, stage, bytes, token_estimate, summary, fetched_by)
+    VALUES('$url','$(sq_esc "$NS")','$hash','$stage',$bytes,$tokens,'$summary','$who')
+    ON CONFLICT(url, team_ns) DO UPDATE SET
+      content_hash=excluded.content_hash,
+      stage=excluded.stage,
+      bytes=excluded.bytes,
+      token_estimate=excluded.token_estimate,
+      summary=excluded.summary,
+      fetched_at=strftime('%s','now'),
+      fetched_by=excluded.fetched_by;
+    DELETE FROM fetch_fts WHERE url='$url';
+    INSERT INTO fetch_fts(url, summary) VALUES('$url','$summary');"
 }
 
 stats() {
-  surreal sql --conn "file://${SDB_FILE}" --ns "${SDB_NS}" --db "${SDB_DB}" --pretty <<SQL
-SELECT
-  count() AS total_fetches,
-  math::sum(token_estimate) AS total_tokens_avoided,
-  math::sum(bytes) AS total_bytes_cached,
-  count(DISTINCT fetched_by) AS unique_devs,
-  count(DISTINCT content_hash) AS unique_content
-FROM fetch
-WHERE team_ns = '${SDB_NS}'
-GROUP ALL;
-SQL
+  sqlite3 -column -header "$DB" "
+    SELECT
+      COUNT(*) AS total_fetches,
+      COALESCE(SUM(token_estimate),0) AS total_tokens_cached,
+      COALESCE(SUM(bytes),0) AS total_bytes_cached,
+      COUNT(DISTINCT fetched_by) AS unique_devs,
+      COUNT(DISTINCT content_hash) AS unique_content,
+      (SELECT COUNT(*) FROM fetch WHERE team_ns='$(sq_esc "$NS")') AS this_ns
+    FROM fetch;"
+  echo ""
+  echo "-- per namespace --"
+  sqlite3 -column -header "$DB" "
+    SELECT team_ns, COUNT(*) AS fetches, SUM(token_estimate) AS tokens_cached
+    FROM fetch GROUP BY team_ns ORDER BY fetches DESC LIMIT 10;"
 }
 
 broadcast() {
-  local agent_id="$1" event="$2" payload="${3:-\{\}}"
-  surreal sql --conn "file://${SDB_FILE}" --ns "${SDB_NS}" --db "${SDB_DB}" --json <<SQL
-CREATE agent_event SET
-  agent_id = '${agent_id}',
-  event_type = '${event}',
-  payload = ${payload},
-  team_ns = '${SDB_NS}';
-SQL
+  local agent; agent=$(sq_esc "$1")
+  local event; event=$(sq_esc "$2")
+  local payload; payload=$(sq_esc "${3:-{\}}")
+  sqlite3 "$DB" "INSERT INTO agent_event(agent_id, event_type, payload, team_ns)
+    VALUES('$agent','$event','$payload','$(sq_esc "$NS")');"
 }
 
 tail_events() {
-  local since="${1:-1h}"
-  surreal sql --conn "file://${SDB_FILE}" --ns "${SDB_NS}" --db "${SDB_DB}" --pretty <<SQL
-SELECT * FROM agent_event
-WHERE team_ns = '${SDB_NS}' AND ts > time::now() - ${since}
-ORDER BY ts DESC LIMIT 50;
-SQL
+  local since="${1:-3600}"
+  sqlite3 -column -header "$DB" "
+    SELECT agent_id, event_type, payload, datetime(ts,'unixepoch','localtime') AS at
+    FROM agent_event
+    WHERE team_ns='$(sq_esc "$NS")' AND ts > strftime('%s','now') - $since
+    ORDER BY ts DESC LIMIT 50;"
+}
+
+search() {
+  local query; query=$(sq_esc "$1")
+  sqlite3 -json "$DB" "
+    SELECT f.url, f.stage, f.token_estimate, f.summary, f.fetched_by,
+           datetime(f.fetched_at,'unixepoch','localtime') AS at
+    FROM fetch f
+    WHERE f.url IN (SELECT url FROM fetch_fts WHERE fetch_fts MATCH '$query')
+      AND f.team_ns='$(sq_esc "$NS")'
+    ORDER BY f.fetched_at DESC LIMIT 20;"
+}
+
+purge() {
+  local older_than="${1:-86400}"
+  sqlite3 "$DB" "DELETE FROM fetch WHERE fetched_at < strftime('%s','now') - $older_than;"
+  sqlite3 "$DB" "DELETE FROM agent_event WHERE ts < strftime('%s','now') - $older_than;"
+  echo "[team-sandbox] purged entries older than ${older_than}s"
 }
 
 case "${1:-help}" in
-  init) init_schema ;;
-  lookup) lookup "$2" ;;
-  record) record "$2" "$3" "$4" "$5" "$6" ;;
+  init) sqlite_init ;;
+  lookup) shift; lookup "$@" ;;
+  record) shift; record "$@" ;;
   stats) stats ;;
-  broadcast) broadcast "$2" "$3" "${4:-\{\}}" ;;
-  tail) tail_events "${2:-1h}" ;;
+  broadcast) shift; broadcast "$@" ;;
+  tail) shift; tail_events "$@" ;;
+  search) shift; search "$@" ;;
+  purge) shift; purge "$@" ;;
   *)
     cat <<USAGE
-team-sandbox — multi-dev shared context-mode via SurrealDB
+team-sandbox — shared Hyperstack cache (SQLite + FTS5)
 
-  init                         initialize schema
-  lookup <url>                 check if url already fetched by team
-  record <url> <stage> <bytes> <hash> <tokens>
-  stats                        team savings summary
-  broadcast <agent> <event> [json]   push event to team bus
-  tail [since]                 tail recent events (default 1h)
+Commands:
+  init                         Initialize schema at \$CTS_TEAM_DB_PATH
+  lookup <url> [max_age_sec]   Check team cache (default max_age: 3600s)
+  record <url> <stage> <bytes> <hash> <tokens> [summary]
+                               Record a fetch in the team cache
+  stats                        Team savings summary (overall + per-ns)
+  broadcast <agent> <event> [json]
+                               Push event to team bus
+  tail [since_sec]             Tail recent events (default: 1h)
+  search <fts5_query>          FTS5 search across summaries + urls
+  purge [older_than_sec]       Delete entries older than (default: 24h)
 
-env:
-  CTS_TEAM_NS  namespace (default: 'default')
-  CTS_TEAM_DB  database  (default: 'hyperstack')
+Environment:
+  CTS_TEAM_NS        namespace (default: 'default')
+  CTS_TEAM_DB_PATH   SQLite file (default: ~/.cts/hyperstack.db)
 USAGE
     ;;
 esac

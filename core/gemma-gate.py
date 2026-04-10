@@ -10,7 +10,7 @@ from urllib.request import Request, urlopen
 from urllib.error import URLError
 
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434")
-MODEL = os.environ.get("CTS_GEMMA_MODEL", "gemma3:4b")
+MODEL = os.environ.get("CTS_GEMMA_MODEL", "phi4-mini:latest")
 THRESHOLD = int(os.environ.get("CTS_GEMMA_THRESHOLD", "500"))
 
 SYSTEM = """You are a token-budget summarizer for an AI coding agent.

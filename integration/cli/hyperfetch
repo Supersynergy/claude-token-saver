@@ -63,48 +63,47 @@ json_escape() {
   python3 -c 'import json,sys; print(json.dumps(sys.stdin.read()))'
 }
 
-if [[ "$USE_CACHE" == "1" && -f "$HOME/.claude/toolstack.db" && -x "$SANDBOX" ]]; then
-  CTS_TEAM_NS="$TEAM_NS" bash "$SANDBOX" lookup "$URL" 2>/dev/null | head -c 4096 | \
-    python3 -c 'import json,sys
-raw=sys.stdin.read().strip()
-if raw and raw not in ("[]","null",""):
-  try:
-    data=json.loads(raw)
-    if data:
-      print(json.dumps({"cached":True,"data":data[0] if isinstance(data,list) else data}))
-      sys.exit(0)
-  except Exception: pass
+if [[ "$USE_CACHE" == "1" && -x "$SANDBOX" ]]; then
+  HIT=$(CTS_TEAM_NS="$TEAM_NS" bash "$SANDBOX" lookup "$URL" 3600 2>/dev/null || true)
+  if [[ -n "$HIT" && "$HIT" != "[]" ]]; then
+    echo "$HIT" | python3 -c 'import json,sys
+try:
+  data=json.loads(sys.stdin.read())
+  if data and isinstance(data,list) and len(data)>0:
+    e=data[0]
+    print(json.dumps({"stage":e.get("stage"),"status":200,"url":e.get("url"),"bytes":e.get("bytes",0),"tokens":e.get("token_estimate",0),"team_ns":"'"$TEAM_NS"'","cached":True,"preview":e.get("summary","")}))
+    sys.exit(0)
+except Exception: pass
 sys.exit(1)' && exit 0 || true
+  fi
 fi
 
 BODY=""
 OUT_STAGE=""
 OUT_STATUS=0
+PY="$HOME/.cts/venv/bin/python"
+HELPER="$HOME/.cts/bin/hyperfetch-stage.py"
 
-if stage_enabled "curl_cffi" && [[ -f "$PATCHES/curl_cffi_patch.py" ]]; then
-  BODY=$(uv run --quiet python "$PATCHES/curl_cffi_patch.py" --fetch "$URL" 2>/dev/null || true)
-  if [[ -n "$BODY" ]] && ! echo "$BODY" | grep -q '"blocked":\s*true'; then
-    OUT_STAGE="curl_cffi"
-    OUT_STATUS=200
-  else
-    BODY=""
-  fi
-fi
+run_stage() {
+  local stage="$1"
+  local json
+  json=$("$PY" "$HELPER" --stage "$stage" --url "$URL" 2>/dev/null || true)
+  [[ -z "$json" ]] && return 1
+  local blocked status
+  blocked=$(echo "$json" | python3 -c 'import json,sys;print(1 if json.load(sys.stdin).get("blocked") else 0)' 2>/dev/null || echo 0)
+  status=$(echo "$json" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("status",0))' 2>/dev/null || echo 0)
+  if [[ "$blocked" == "1" ]] || (( status < 200 )) || (( status >= 400 )); then return 1; fi
+  BODY=$(echo "$json" | python3 -c 'import json,sys;print(json.load(sys.stdin).get("body",""))' 2>/dev/null || true)
+  [[ -z "$BODY" ]] && return 1
+  OUT_STAGE="$stage"
+  OUT_STATUS="$status"
+  return 0
+}
 
-if [[ -z "$BODY" ]] && stage_enabled "camoufox" && [[ -f "$PATCHES/camoufox_patch.py" ]]; then
-  BODY=$(uv run --quiet python "$PATCHES/camoufox_patch.py" --fetch "$URL" 2>/dev/null || true)
-  if [[ -n "$BODY" ]]; then OUT_STAGE="camoufox"; OUT_STATUS=200; fi
-fi
-
-if [[ -z "$BODY" ]] && stage_enabled "domshell" && [[ -f "$HOME/projects/browser-tools/domshell-lite.py" ]]; then
-  BODY=$(uv run --quiet python "$HOME/projects/browser-tools/domshell-lite.py" --url "$URL" --select body 2>/dev/null || true)
-  if [[ -n "$BODY" ]]; then OUT_STAGE="domshell"; OUT_STATUS=200; fi
-fi
-
-if [[ -z "$BODY" ]] && stage_enabled "browser" && [[ -f "$PATCHES/camoufox_patch.py" ]]; then
-  BODY=$(uv run --quiet python "$PATCHES/camoufox_patch.py" --snapshot "$URL" --interactive-only 2>/dev/null || true)
-  if [[ -n "$BODY" ]]; then OUT_STAGE="browser"; OUT_STATUS=200; fi
-fi
+stage_enabled "curl_cffi" && run_stage "curl_cffi" || true
+[[ -z "$BODY" ]] && stage_enabled "camoufox" && run_stage "camoufox" || true
+[[ -z "$BODY" ]] && stage_enabled "domshell" && run_stage "domshell" || true
+[[ -z "$BODY" ]] && stage_enabled "browser"  && run_stage "browser"  || true
 
 if [[ -z "$BODY" || -z "$OUT_STAGE" ]]; then
   emit "failed" 0 0 0 '""'
@@ -115,7 +114,7 @@ BYTES=$(printf "%s" "$BODY" | wc -c | tr -d ' ')
 
 KEEP=1
 if [[ -x "$ML_FILTER" ]]; then
-  CLASSIFY=$(printf "%s" "$BODY" | head -c 65536 | uv run --quiet python "$ML_FILTER" --classify 2>/dev/null || echo '{"keep":true}')
+  CLASSIFY=$(printf "%s" "$BODY" | head -c 65536 | "$HOME/.cts/venv/bin/python" "$ML_FILTER" --classify 2>/dev/null || echo '{"keep":true}')
   KEEP=$(echo "$CLASSIFY" | python3 -c 'import json,sys; print(1 if json.load(sys.stdin).get("keep",True) else 0)' 2>/dev/null || echo 1)
 fi
 
@@ -126,7 +125,7 @@ fi
 
 SUMMARY_BODY="$BODY"
 if [[ "$SUMMARIZE" == "1" && -x "$GEMMA" ]]; then
-  GEMMA_OUT=$(printf "%s" "$BODY" | head -c 131072 | uv run --quiet python "$GEMMA" --summarize 2>/dev/null || true)
+  GEMMA_OUT=$(printf "%s" "$BODY" | head -c 131072 | "$HOME/.cts/venv/bin/python" "$GEMMA" --summarize 2>/dev/null || true)
   if [[ -n "$GEMMA_OUT" ]]; then
     SUMMARY_BODY="$GEMMA_OUT"
   fi
@@ -136,8 +135,9 @@ PREVIEW=$(printf "%s" "$SUMMARY_BODY" | head -c 2000 | json_escape)
 TOKENS=$(( $(printf "%s" "$SUMMARY_BODY" | wc -c | tr -d ' ') / 4 + 1 ))
 HASH=$(printf "%s" "$BODY" | shasum | awk '{print $1}' | head -c 16)
 
-if [[ "$USE_CACHE" == "1" && -x "$SANDBOX" && -f "$HOME/.claude/toolstack.db" ]]; then
-  CTS_TEAM_NS="$TEAM_NS" bash "$SANDBOX" record "$URL" "$OUT_STAGE" "$BYTES" "$HASH" "$TOKENS" 2>/dev/null || true
+if [[ "$USE_CACHE" == "1" && -x "$SANDBOX" ]]; then
+  SUMMARY_FOR_CACHE=$(printf "%s" "$SUMMARY_BODY" | head -c 4000)
+  CTS_TEAM_NS="$TEAM_NS" bash "$SANDBOX" record "$URL" "$OUT_STAGE" "$BYTES" "$HASH" "$TOKENS" "$SUMMARY_FOR_CACHE" 2>/dev/null || true
 fi
 
 emit "$OUT_STAGE" "$OUT_STATUS" "$BYTES" "$TOKENS" "$PREVIEW"
