@@ -1,25 +1,25 @@
 ```
- ██████╗ ███████╗████████╗██████╗  ██████╗ 
-██╔════╝ ██╔════╝╚══██╔══╝██╔══██╗██╔═══██╗
-██║  ███╗█████╗     ██║   ██████╔╝██║   ██║
-██║   ██║██╔══╝     ██║   ██╔══██╗██║   ██║
-╚██████╔╝███████╗   ██║   ██║  ██║╚██████╔╝
- ╚═════╝ ╚══════╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝ 
+ ██████╗██╗      █████╗ ██╗   ██╗██████╗ ███████╗
+██╔════╝██║     ██╔══██╗██║   ██║██╔══██╗██╔════╝
+██║     ██║     ███████║██║   ██║██║  ██║█████╗
+██║     ██║     ██╔══██║██║   ██║██║  ██║██╔══╝
+╚██████╗███████╗██║  ██║╚██████╔╝██████╔╝███████╗
+ ╚═════╝╚══════╝╚═╝  ╚═╝ ╚═════╝ ╚═════╝ ╚══════╝
 
-████████╗███████╗██╗  ██╗████████╗██████╗  ██████╗ 
-╚══██╔══╝██╔════╝╚██╗██╔╝╚══██╔══╝██╔══██╗██╔═══██╗
-   ██║   █████╗   ╚███╔╝    ██║   ██████╔╝██║   ██║
-   ██║   ██╔══╝   ██╔██╗    ██║   ██╔══██╗██║   ██║
-   ██║   ███████╗██╔╝ ██╗   ██║   ██║  ██║╚██████╔╝
-   ╚═╝   ╚══════╝╚═╝  ╚═╝   ╚═╝   ╚═╝  ╚═╝ ╚═════╝ 
+████████╗ ██████╗ ██╗  ██╗███████╗███╗   ██╗
+╚══██╔══╝██╔═══██╗██║ ██╔╝██╔════╝████╗  ██║
+   ██║   ██║   ██║█████╔╝ █████╗  ██╔██╗ ██║
+   ██║   ██║   ██║██╔═██╗ ██╔══╝  ██║╚██╗██║
+   ██║   ╚██████╔╝██║  ██╗███████╗██║ ╚████║
+   ╚═╝    ╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝  ╚═══╝
 
- ██████╗ ██████╗ ███████╗██╗██████╗ ██╗ █████╗ ███╗   ██╗
-██╔═══██╗██╔══██╗██╔════╝██║██╔══██╗██║██╔══██╗████╗  ██║
-██║   ██║██████╔╝███████╗██║██║  ██║██║███████║██╔██╗ ██║
-██║   ██║██╔══██╗╚════██║██║██║  ██║██║██╔══██║██║╚██╗██║
-╚██████╔╝██████╔╝███████║██║██████╔╝██║██║  ██║██║ ╚████║
- ╚═════╝ ╚═════╝ ╚══════╝╚═╝╚═════╝ ╚═╝╚═╝  ╚═╝╚═╝  ╚═══╝
-                                                              
+███████╗ █████╗ ██╗   ██╗███████╗██████╗
+██╔════╝██╔══██╗██║   ██║██╔════╝██╔══██╗
+███████╗███████║██║   ██║█████╗  ██████╔╝
+╚════██║██╔══██║╚██╗ ██╔╝██╔══╝  ██╔══██╗
+███████║██║  ██║ ╚████╔╝ ███████╗██║  ██║
+╚══════╝╚═╝  ╚═╝  ╚═══╝  ╚══════╝╚═╝  ╚═╝
+
          ⚡ Speed or 💰 Savings — Adaptive.
          Every CLI. Every Model. Every Budget.
 ```
@@ -64,8 +64,9 @@ Wähle das optimale Modell basierend auf:
 | **MiniMax** | M2.7 | ⚡⚡⚡⚡⚡ | $0.05 | **Keine nötig** | High-Volume, Speed |
 | **Google** | Gemini 3 Flash | ⚡⚡⚡⚡ | $0.07 | Minimal | Quick Tasks |
 | **Google** | Gemini 3 Pro | ⚡⚡⚡ | $1.00 | 60% | Complex Reasoning |
-| **Anthropic** | Claude 3.5 Sonnet | ⚡⚡⚡ | $3.00 | **60-90%** | Production Code |
-| **Anthropic** | Claude 3.5 Opus | ⚡⚡ | $15.00 | **60-90%** | Architecture |
+| **Anthropic** | Claude Sonnet 4.6 | ⚡⚡⚡ | $3.00 | **60-90%** | Production Code |
+| **Anthropic** | Claude Opus 4.6 | ⚡⚡ | $15.00 | **60-90%** | Architecture |
+| **Anthropic** | Claude Haiku 4.5 | ⚡⚡⚡⚡ | $1.00 | **60-90%** | Fast Agents |
 | **OpenAI** | GPT-4o | ⚡⚡⚡ | $2.50 | **60-90%** | General Tasks |
 | **Moonshot** | Kimi K2.5 | ⚡⚡⚡⚡ | $0.50 | Minimal | Code Generation |
 | **DeepSeek** | Coder | ⚡⚡⚡⚡ | $0.14 | Minimal | Code Completion |
@@ -137,10 +138,10 @@ uts select simple fast 10000 draft
 │      │       └─→ YES → MiniMax M2.7 ⚡                │
 │      │                                                  │
 │      ├─→ Code Quality = "production"?                  │
-│      │       └─→ YES → Claude 3.5 Sonnet 💰           │
+│      │       └─→ YES → Claude Sonnet 4.6 💰           │
 │      │                                                  │
 │      ├─→ Complexity = "complex"?                       │
-│      │       └─→ YES → Claude 3.5 Opus 💰             │
+│      │       └─→ YES → Claude Opus 4.6 💰             │
 │      │                                                  │
 │      └─→ Default → Gemini 3 Flash ⚡                   │
 └─────────────────────────────────────────────────────────┘
@@ -217,6 +218,70 @@ rtk-universal stats       # Savings anzeigen
 | npm | `added X packages`, warnings | 85% |
 | pytest | `passed X tests`, platform info | 85% |
 | docker | `Pulling from layer`, Digest | 90% |
+
+---
+
+## 🚀 Hyperstack — 10,000x Claude Code Experience
+
+> 4-stage escalation chain + local ML triage + shared team sandbox.
+> Target: **same price, 10,000x more effective Claude Code sessions**.
+
+```
+curl_cffi → camoufox → domshell → browser (fail-forward)
+      ↓ catboost pre-filter (local, 5ms)
+      ↓ gemma local summarizer (Ollama, 200ms)
+      ↓ context-mode sandbox
+      ↓ SurrealDB team cache (multi-dev dedupe)
+```
+
+**Install**: `./install-hyperstack.sh` · **Docs**: [HYPERSTACK.md](./HYPERSTACK.md)
+
+| Scenario | Baseline | Hyperstack | Factor |
+|----------|----------|------------|--------|
+| Single web scrape | 15k tok | 200 tok | **75x** |
+| 10-dev team, same target | 150k tok | 200 tok | **750x** |
+| + catboost noise filter | — | 40 tok | **3,666x** |
+| + gemma summary gate | — | 2 tok | **~73,333x** |
+
+See [HYPERSTACK.md](./HYPERSTACK.md) for architecture, agent team roles (frontliner/deep_diver/heavy_lifter), cost model, and integration guide.
+
+---
+
+## context-mode — 98% Context Reduction
+
+> 10 MCP tools that keep raw tool output in a sandbox instead of flooding your context window.
+
+| Tool | Purpose |
+|------|---------|
+| `ctx_batch_execute` | Run N commands + queries in ONE call (primary gather) |
+| `ctx_search` | Fuzzy search across indexed output (many queries, one call) |
+| `ctx_execute` | Run code/shell in sandbox (analysis, API calls, log parsing) |
+| `ctx_execute_file` | Same, but on a file path |
+| `ctx_fetch_and_index` | Replacement for WebFetch — stores + indexes pages |
+| `ctx_index` | Manually index a file/dir into the sandbox |
+| `ctx_stats` | Show session token savings |
+| `ctx_doctor` | Diagnose install health |
+| `ctx_upgrade` | Update context-mode |
+| `ctx_purge` | Clear sandbox index |
+
+**Rule**: 2+ commands → `ctx_batch_execute`. Never use multiple Bash calls.
+
+---
+
+## beads (bd) — Task Tracking + Memory
+
+> Replaces TodoWrite/TaskCreate and markdown notes with a grep-able issue DB.
+
+```bash
+bd ready                    # Available work, no blockers
+bd create --title=... --type=task --priority=2
+bd update <id> --claim
+bd close <id1> <id2> ...
+bd remember "..."           # Persistent cross-session memory
+bd memories <keyword>
+```
+
+Pairs with CTS: `bd` tracks the work, `context-mode` keeps the output out of your window, `RTK` compresses the commands.
 
 ---
 
@@ -404,9 +469,10 @@ This project stands on the shoulders of giants. Special thanks to:
 |---------|----------|-----|
 | **RTK (Rust Token Killer)** | 60-90% CLI compression | [rtk-ai.app](https://rtk-ai.app) |
 | **context-mode** | 98% context reduction, 10 tools | MCP Server |
-| **shellfirm** | Destructive command protection | [shellfirm](https://github.com/rot constant/shellfirm) |
+| **shellfirm** | Destructive command protection | [jondot/shellfirm](https://github.com/jondot/shellfirm) |
 | **claude-hud** | Token HUD display | Claude Plugins |
 | **claude-mem** | Memory system | Claude Plugins |
+| **beads (bd)** | Issue tracking + persistent memory | Workflow CLI |
 
 ### CLI Agents We Support
 
