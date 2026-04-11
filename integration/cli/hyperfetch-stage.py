@@ -44,6 +44,23 @@ def emit(stage, status, body, blocked=False, error=None):
     sys.stdout.write(json.dumps(out))
 
 
+CHROME_POOL = ["chrome124", "chrome123", "chrome120", "chrome110", "chrome107"]
+SAFARI_POOL = ["safari15_5", "safari17_0", "safari17_2_ios"]
+FIREFOX_POOL = ["firefox133", "firefox135"]
+ALL_POOL = CHROME_POOL + SAFARI_POOL + FIREFOX_POOL
+
+
+def pick_impersonate() -> str:
+    """Browser pool rotation — based on user's STEALTH_OPTIMIZATION_COMPLETE_REPORT.md."""
+    import random
+    override = os.environ.get("CTS_IMPERSONATE", "").strip()
+    if override:
+        return override
+    if os.environ.get("CTS_ROTATE_BROWSERS", "1") == "1":
+        return random.choice(CHROME_POOL)
+    return "chrome124"
+
+
 def stage_curl_cffi(url: str, timeout: int = 15):
     try:
         from curl_cffi import requests as cffi_requests
@@ -53,25 +70,74 @@ def stage_curl_cffi(url: str, timeout: int = 15):
 
     ua, headers, fp = try_import_patches_constants()
     headers = {**headers, "User-Agent": ua}
+    impersonate = pick_impersonate()
 
-    impersonate = "chrome124"
-    for candidate in ("chrome124", "chrome123", "chrome120", "chrome110", "chrome107"):
-        impersonate = candidate
-        break
+    # Retry chain: if selected impersonation fails to load (newer curl_cffi changes), try fallbacks
+    tried = [impersonate]
 
+    last_err = None
+    for imp in [impersonate, "chrome124", "chrome123", "chrome120"]:
+        if imp in tried and imp != impersonate:
+            continue
+        tried.append(imp)
+        try:
+            r = cffi_requests.get(url, headers=headers, timeout=timeout, impersonate=imp, allow_redirects=True)
+            status = r.status_code
+            body = r.text
+            blocked = (
+                status in (401, 403, 429, 503)
+                or (any(marker in body.lower() for marker in ("cloudflare challenge", "captcha", "attention required", "checking your browser")) and len(body) < 5000)
+            )
+            emit("curl_cffi", status, body[:500000], blocked=blocked)
+            return 0
+        except Exception as e:
+            last_err = e
+            continue
+    emit("curl_cffi", 0, "", error=last_err or "all impersonations failed")
+    return 1
+
+
+def stage_crawl4ai(url: str, timeout: int = 120):
+    """Stage backed by crawl4ai for clean LLM-ready markdown output."""
+    c4a_py = HOME / "projects" / "scraper-benchmark" / ".venv" / "bin" / "python"
+    if not c4a_py.exists():
+        emit("crawl4ai", 0, "", error=f"crawl4ai venv not found at {c4a_py}")
+        return 1
+
+    import subprocess
+    script = (
+        "import asyncio, json, warnings; warnings.filterwarnings('ignore')\n"
+        "async def main():\n"
+        "    from crawl4ai import AsyncWebCrawler\n"
+        f"    async with AsyncWebCrawler(verbose=False) as c:\n"
+        f"        r = await c.arun(url={url!r})\n"
+        "        md = (r.markdown or '')[:500000]\n"
+        "        print(json.dumps({'body': md, 'status': 200, 'blocked': False}))\n"
+        "asyncio.run(main())\n"
+    )
     try:
-        r = cffi_requests.get(url, headers=headers, timeout=timeout, impersonate=impersonate, allow_redirects=True)
-        status = r.status_code
-        body = r.text
-        blocked = (
-            status in (401, 403, 429, 503)
-            or any(marker in body.lower() for marker in ("cloudflare", "captcha", "attention required", "checking your browser"))
-            and len(body) < 5000
+        r = subprocess.run(
+            [str(c4a_py), "-c", script],
+            capture_output=True, text=True, timeout=timeout,
         )
-        emit("curl_cffi", status, body[:500000], blocked=blocked)
-        return 0
+        if r.returncode != 0:
+            emit("crawl4ai", 0, "", error=r.stderr[:200])
+            return 1
+        # crawl4ai writes status lines to stdout; pick the JSON one
+        for line in r.stdout.splitlines():
+            line = line.strip()
+            if line.startswith("{"):
+                import json as _json
+                data = _json.loads(line)
+                emit("crawl4ai", data.get("status", 200), data.get("body", "")[:500000], blocked=False)
+                return 0
+        emit("crawl4ai", 0, "", error="no JSON output from crawl4ai subprocess")
+        return 1
+    except subprocess.TimeoutExpired:
+        emit("crawl4ai", 0, "", error="crawl4ai timeout")
+        return 1
     except Exception as e:
-        emit("curl_cffi", 0, "", error=e)
+        emit("crawl4ai", 0, "", error=e)
         return 1
 
 
@@ -140,7 +206,7 @@ def stage_domshell(url: str, selector: str = "body", timeout: int = 30):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--stage", required=True, choices=["curl_cffi", "camoufox", "domshell", "browser"])
+    p.add_argument("--stage", required=True, choices=["curl_cffi", "camoufox", "domshell", "browser", "crawl4ai"])
     p.add_argument("--url", required=True)
     p.add_argument("--selector", default="body")
     p.add_argument("--timeout", type=int, default=30)
@@ -154,6 +220,8 @@ def main():
         sys.exit(stage_domshell(args.url, args.selector, args.timeout))
     elif args.stage == "browser":
         sys.exit(stage_camoufox(args.url, args.timeout))
+    elif args.stage == "crawl4ai":
+        sys.exit(stage_crawl4ai(args.url, args.timeout))
 
 
 if __name__ == "__main__":

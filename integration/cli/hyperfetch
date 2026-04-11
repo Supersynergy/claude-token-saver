@@ -70,10 +70,15 @@ GEMMA="$TOOLSAVER/core/gemma-gate.py"
 
 stage_enabled() {
   local stage="$1"
+  # crawl4ai is opt-in only: run IFF user explicitly asks for --stage crawl4ai
+  if [[ "$STAGE_CAP" == "crawl4ai" ]]; then
+    [[ "$stage" == "crawl4ai" ]]
+    return
+  fi
   case "$STAGE_CAP" in
     curl_cffi) [[ "$stage" == "curl_cffi" ]] ;;
     camoufox)  [[ "$stage" == "curl_cffi" || "$stage" == "camoufox" ]] ;;
-    domshell)  [[ "$stage" != "browser" ]] ;;
+    domshell)  [[ "$stage" != "browser" && "$stage" != "crawl4ai" ]] ;;
     *)         true ;;
   esac
 }
@@ -126,10 +131,14 @@ run_stage() {
   return 0
 }
 
-stage_enabled "curl_cffi" && run_stage "curl_cffi" || true
-[[ -z "$BODY" ]] && stage_enabled "camoufox" && run_stage "camoufox" || true
-[[ -z "$BODY" ]] && stage_enabled "domshell" && run_stage "domshell" || true
-[[ -z "$BODY" ]] && stage_enabled "browser"  && run_stage "browser"  || true
+if [[ "$STAGE_CAP" == "crawl4ai" ]]; then
+  run_stage "crawl4ai" || true
+else
+  stage_enabled "curl_cffi" && run_stage "curl_cffi" || true
+  [[ -z "$BODY" ]] && stage_enabled "camoufox" && run_stage "camoufox" || true
+  [[ -z "$BODY" ]] && stage_enabled "domshell" && run_stage "domshell" || true
+  [[ -z "$BODY" ]] && stage_enabled "browser"  && run_stage "browser"  || true
+fi
 
 if [[ -z "$BODY" || -z "$OUT_STAGE" ]]; then
   emit "failed" 0 0 0 '""'
