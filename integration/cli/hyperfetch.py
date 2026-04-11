@@ -9,9 +9,12 @@ import json
 import os
 import random
 import re
+import socket
 import sqlite3
 import sys
+import threading
 import time
+from collections import defaultdict
 from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit, parse_qsl, urlencode
 from urllib.request import Request, urlopen
@@ -38,6 +41,44 @@ TTL_DEFAULTS = {
     "news": 1800,     # 30min
     "live": 60,       # 1min
 }
+
+# ============================================================================
+# Per-host rate limiting — prevents hammering the same domain
+# ============================================================================
+_host_locks: dict[str, threading.Semaphore] = {}
+_host_locks_lock = threading.Lock()
+_host_failures: dict[str, int] = defaultdict(int)
+_host_last_hit: dict[str, float] = {}
+PER_HOST_PARALLEL = int(os.environ.get("FETCH_PER_HOST_PARALLEL", "2"))
+PER_HOST_DELAY = float(os.environ.get("FETCH_PER_HOST_DELAY", "0.3"))  # seconds between same-host requests
+HOST_FAILURE_BLACKLIST = int(os.environ.get("FETCH_HOST_FAILURE_LIMIT", "5"))
+
+
+def _get_host_lock(host: str) -> threading.Semaphore:
+    with _host_locks_lock:
+        if host not in _host_locks:
+            _host_locks[host] = threading.Semaphore(PER_HOST_PARALLEL)
+        return _host_locks[host]
+
+
+def _host_is_blacklisted(host: str) -> bool:
+    return _host_failures[host] >= HOST_FAILURE_BLACKLIST
+
+
+def _record_host_result(host: str, success: bool):
+    if success:
+        _host_failures[host] = max(0, _host_failures[host] - 1)
+    else:
+        _host_failures[host] += 1
+    _host_last_hit[host] = time.time()
+
+
+def _host_polite_delay(host: str):
+    """Wait if we hit the same host too recently."""
+    last = _host_last_hit.get(host, 0)
+    elapsed = time.time() - last
+    if elapsed < PER_HOST_DELAY:
+        time.sleep(PER_HOST_DELAY - elapsed)
 
 SUMMARY_SYSTEM = """Extract facts for an AI agent.
 - Max 5 bullets
@@ -148,6 +189,16 @@ def ttl_for(url: str, default: int = 3600) -> int:
 # ============================================================================
 # Stage 1: HTTP fetch with TLS fingerprint rotation
 # ============================================================================
+
+def dns_resolvable(host: str, timeout: float = 2.0) -> bool:
+    """Quick DNS check — lets us skip dead domains before the full HTTP dance."""
+    try:
+        socket.setdefaulttimeout(timeout)
+        socket.gethostbyname(host)
+        return True
+    except (socket.gaierror, socket.timeout, OSError):
+        return False
+
 
 def stage_1(url: str, timeout: int = 15) -> dict:
     try:
@@ -359,9 +410,12 @@ def mode_markdown(body: str) -> str:
 # ============================================================================
 
 def fetch_one(conn, url: str, mode: str, team_ns: str, no_cache: bool,
-              task: str = "", max_stage: str = "auto") -> dict:
+              task: str = "", max_stage: str = "auto",
+              skip_dns_check: bool = False, max_retries: int = 1,
+              escalate_on_block: bool = True) -> dict:
     nurl = normalize_url(url)
     t0 = time.perf_counter()
+    host = urlsplit(nurl).netloc.lower()
 
     # Gate 1: cache lookup
     if not no_cache:
@@ -375,10 +429,41 @@ def fetch_one(conn, url: str, mode: str, team_ns: str, no_cache: bool,
                 "preview": hit["summary"],
             }
 
-    # Stage 1: HTTP with TLS spoof
-    r = stage_1(nurl)
-    if r.get("blocked") or not r.get("body"):
-        # Try stage escalation
+    # Early dead-domain skip
+    if _host_is_blacklisted(host):
+        return {
+            "url": url, "stage": "blacklisted", "status": 0, "mode": mode,
+            "error": f"host blacklisted after {_host_failures[host]} failures",
+            "latency_ms": round((time.perf_counter() - t0) * 1000, 1),
+        }
+
+    if not skip_dns_check and not dns_resolvable(host):
+        _record_host_result(host, False)
+        return {
+            "url": url, "stage": "dns_fail", "status": 0, "mode": mode,
+            "error": f"DNS resolution failed for {host}",
+            "latency_ms": round((time.perf_counter() - t0) * 1000, 1),
+        }
+
+    # Per-host polite delay + semaphore
+    host_lock = _get_host_lock(host)
+    with host_lock:
+        _host_polite_delay(host)
+
+        # Stage 1 with retries + exponential backoff
+        r = None
+        for attempt in range(max_retries + 1):
+            r = stage_1(nurl)
+            if r.get("body") and not r.get("blocked"):
+                break
+            if attempt < max_retries:
+                backoff = 0.5 * (2 ** attempt) + random.uniform(0, 0.2)
+                time.sleep(backoff)
+
+        _record_host_result(host, bool(r and r.get("body") and not r.get("blocked")))
+
+    # Auto-escalation to stage 2 if stage 1 blocked
+    if (r.get("blocked") or not r.get("body")) and escalate_on_block and max_stage != "1":
         r2 = stage_escalate(nurl, max_stage=max_stage)
         if r2.get("body"):
             r = r2
@@ -388,6 +473,12 @@ def fetch_one(conn, url: str, mode: str, team_ns: str, no_cache: bool,
                 "mode": mode, "error": r.get("error", "blocked"),
                 "latency_ms": round((time.perf_counter() - t0) * 1000, 1),
             }
+    elif not r.get("body"):
+        return {
+            "url": url, "stage": "failed", "status": r.get("status", 0),
+            "mode": mode, "error": r.get("error", "blocked"),
+            "latency_ms": round((time.perf_counter() - t0) * 1000, 1),
+        }
 
     body = r["body"]
 
@@ -481,13 +572,16 @@ def main():
     # Batch
     p.add_argument("--batch", action="store_true", help="read URLs from stdin")
     p.add_argument("--parallel", type=int, default=10)
+    p.add_argument("--retries", type=int, default=1, help="per-URL retry attempts on transient failures")
+    p.add_argument("--resume", action="store_true", help="skip URLs already in cache (batch mode)")
+    p.add_argument("--no-escalate", action="store_true", help="don't auto-escalate to stage 2 on block")
     # Meta
     p.add_argument("--doctor", action="store_true")
     p.add_argument("--version", action="store_true")
     args = p.parse_args()
 
     if args.version:
-        print("fetch hyperfetch/0.3.0 spec/1.0")
+        print("fetch hyperfetch/0.4.0 spec/1.0")
         return 0
     if args.doctor:
         return doctor()
@@ -499,21 +593,102 @@ def main():
 
     if args.batch:
         import concurrent.futures
-        urls = [line.strip() for line in sys.stdin if line.strip()]
-        if not urls:
+        raw_urls = [line.strip() for line in sys.stdin if line.strip()]
+        if not raw_urls:
             print(json.dumps({"error": "no URLs in stdin"}))
             return 2
-        with concurrent.futures.ThreadPoolExecutor(max_workers=min(args.parallel, 20)) as ex:
+
+        # Dedup while preserving order
+        seen = set()
+        urls = []
+        for u in raw_urls:
+            nu = normalize_url(u)
+            if nu not in seen:
+                seen.add(nu)
+                urls.append(u)
+
+        total = len(urls)
+        duped = len(raw_urls) - total
+        if duped > 0:
+            print(f"[hyperfetch] deduped {duped} URLs, processing {total}", file=sys.stderr)
+        else:
+            print(f"[hyperfetch] processing {total} URLs", file=sys.stderr)
+
+        # Checkpoint: skip URLs already in cache unless --no-cache
+        if not args.no_cache and args.resume:
+            skipped = 0
+            pending = []
+            for u in urls:
+                nu = normalize_url(u)
+                if cache_lookup(conn, nu, args.team_ns, args.mode, max_age=ttl_for(nu)):
+                    skipped += 1
+                else:
+                    pending.append(u)
+            if skipped:
+                print(f"[hyperfetch] resume: {skipped} already cached, {len(pending)} pending", file=sys.stderr)
+            urls = pending
+
+        # Progress tracking
+        counter = {"done": 0, "ok": 0, "failed": 0, "cached": 0, "start": time.time()}
+        counter_lock = threading.Lock()
+        failures = defaultdict(list)
+
+        def progress_tick(result):
+            with counter_lock:
+                counter["done"] += 1
+                if result.get("stage") == "cached":
+                    counter["cached"] += 1
+                elif result.get("error") or result.get("stage") == "failed":
+                    counter["failed"] += 1
+                    reason = result.get("error", "unknown")[:40] or result.get("stage", "")
+                    failures[reason].append(result.get("url", ""))
+                else:
+                    counter["ok"] += 1
+
+                d = counter["done"]
+                if d % max(1, total // 20) == 0 or d == total:
+                    elapsed = time.time() - counter["start"]
+                    rate = d / max(elapsed, 0.1)
+                    eta = (total - d) / max(rate, 0.1)
+                    print(
+                        f"[hyperfetch] {d}/{total} "
+                        f"ok={counter['ok']} cache={counter['cached']} fail={counter['failed']} "
+                        f"rate={rate:.1f}/s eta={eta:.0f}s",
+                        file=sys.stderr,
+                    )
+
+        # Execute in parallel
+        max_workers = min(args.parallel, 50)
+        with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as ex:
             futures = [
-                ex.submit(fetch_one, conn, u, args.mode, args.team_ns, args.no_cache, args.extract_task or "", args.stage)
+                ex.submit(
+                    fetch_one, conn, u, args.mode, args.team_ns,
+                    args.no_cache, args.extract_task or "", args.stage,
+                    False, args.retries, not args.no_escalate,
+                )
                 for u in urls
             ]
             for fut in concurrent.futures.as_completed(futures):
                 try:
                     result = fut.result()
                     print(json.dumps(result))
+                    progress_tick(result)
                 except Exception as e:
-                    print(json.dumps({"error": str(e)[:200]}))
+                    err = {"error": str(e)[:200], "stage": "failed"}
+                    print(json.dumps(err))
+                    progress_tick(err)
+
+        # Final report
+        elapsed = time.time() - counter["start"]
+        print(
+            f"\n[hyperfetch] DONE — {counter['done']}/{total} in {elapsed:.1f}s "
+            f"(ok={counter['ok']} cached={counter['cached']} failed={counter['failed']})",
+            file=sys.stderr,
+        )
+        if failures:
+            print("[hyperfetch] failure breakdown:", file=sys.stderr)
+            for reason, urls_failed in sorted(failures.items(), key=lambda x: -len(x[1]))[:10]:
+                print(f"  {len(urls_failed)}x  {reason}", file=sys.stderr)
         return 0
 
     if not args.url:
