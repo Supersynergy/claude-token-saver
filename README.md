@@ -64,6 +64,24 @@ rtk read (FULL FILE)        8ms   22,541     5,635t     +412% ✗✗ BUG
 ctx_batch_execute (1 call)  3ms       40        10t      -99% ✓✓✓
 ```
 
+### RTK per-command verdict (real benchmarks)
+
+```
+Command          tok saved   speed hit   verdict
+──────────────────────────────────────────────────────
+rtk git diff     -99%        -30%        ★★★ always use
+rtk docker ps    -84%        +22% faster ★★★ always use
+rtk find         -57%        -22%        ✓ use
+rtk curl         -63%        +18% slower ✓ use for JSON structure
+rtk ps aux       -50%        3x slower   ✓ worth it
+rtk git status   -53%        2x slower   ✓ worth it
+rtk ls           +35% WORSE  2x slower   ✗ never — use Glob tool
+rtk env          +105% WORSE 30% slower  ✗ never — use env | grep
+rtk grep         +10000% WRS 2x slower   ✗ never — use Grep tool
+rtk read         +412% WORSE 2x slower   ✗ never — use Read tool
+rtk json         broken      ~1s         ✗ broken (returns empty)
+```
+
 ### Critical findings from benchmarks
 
 **`rtk read` is broken for token saving** — loads full file + metadata = 5,635t vs 1,101t raw = 5x WORSE. Never use `rtk read`. Use the native `Read` tool instead.
@@ -73,6 +91,70 @@ ctx_batch_execute (1 call)  3ms       40        10t      -99% ✓✓✓
 **`rtk curl` is the sweet spot for APIs** — -63% tokens, only +18% slower. Best when you need JSON structure/schema. For specific fact extraction from large pages: `hyperfetch --extract "field"`.
 
 **`ctx_batch_execute` is fastest AND smallest** — 3ms, 10t for any N commands. Replaces both Bash calls and research subagents.
+
+---
+
+## Gemma Gate — Why, When to Skip, What to Use Instead
+
+### Why Gemma exists
+
+Gemma (phi4-mini via Ollama) compresses large unstructured HTML before it enters Claude's context window. Without it, a typical web page = 12,500 tokens. With Gemma = 125 tokens.
+
+### When Gemma HURTS (skip it)
+
+```
+Scenario              Raw      Gemma     Better alternative
+────────────────────────────────────────────────────────────
+JSON API call         107t     153t+46%  curl_cffi+keys = 3t  ← -97%
+Small API (<500 bytes) 39t     153t+292% rtk curl = 39t
+Cached URL (2nd call) 160t     160t      hyperfetch (cache)=137ms
+```
+
+### When Gemma HELPS (keep it)
+
+```
+Scenario              Raw        trafilatura  Gemma    best
+──────────────────────────────────────────────────────────────────
+Large HTML article  12,500t     ~1,250t      ~125t    trafilatura first
+Doc page (facts)    12,500t       N/A         ~12t    hf --extract "X"
+Anti-bot target       N/A         N/A        ~125t    hf --stage camoufox
+```
+
+### Gemma alternatives (ranked)
+
+| Option | Size | Overhead | Quality | Use when |
+|--------|------|---------|---------|----------|
+| **curl_cffi + python extract** | 0 | 0ms | perfect | JSON APIs — programmatic |
+| **trafilatura** | installed | 0ms | 90% | HTML articles/docs (no LLM!) |
+| **html2text** | installed | 0ms | 80% | simpler HTML conversion |
+| **regex strip** | 0 | 5ms | 60% | fastest, good enough |
+| **qwen2.5:0.5b** | 397MB | ~100ms | 85% | `ollama pull qwen2.5:0.5b` |
+| **phi4-mini (current)** | 2.5GB | ~300ms | 95% | complex extraction |
+| **Claude Haiku API** | remote | ~400ms | 99% | $1/M, most accurate |
+
+### Optimization applied: trafilatura-first pipeline
+
+`gemma-gate.py` now runs **trafilatura before Ollama**:
+```
+HTML input → trafilatura (0ms) → if still >THRESHOLD → phi4-mini
+```
+Result: 90% of HTML pages never reach the LLM. phi4-mini only activates for complex/JS-rendered content where trafilatura fails.
+
+Override: `CTS_FORCE_LLM=1` to always use LLM | `CTS_GEMMA_MODEL=qwen2.5:0.5b` for lighter model.
+
+### Best combination per scenario
+
+```
+JSON API (structure needed)  → rtk curl -s <url>              = 39t, 890ms
+JSON API (keys only)         → curl_cffi + python parse        = 3t, 1300ms
+HTML page (article/doc)      → curl_cffi + trafilatura         = ~200t, 800ms, 0 LLM
+HTML page (specific fact)    → hyperfetch --extract "field"    = 12t, 3200ms
+HTML page (anti-bot)         → hyperfetch --stage camoufox     = 153t, 3300ms
+HTML page (cached)           → hyperfetch (2nd call)           = 160t, 137ms ★
+Docker/process output        → rtk docker ps / rtk ps aux      = 274t, -84%
+Git diff review              → rtk diff HEAD~1                 = ~0t, 9ms ★★★
+Any multi-command research   → ctx_batch_execute               = 13t, 4ms
+```
 
 ---
 
