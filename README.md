@@ -39,21 +39,179 @@ curl -fsSL https://raw.githubusercontent.com/Supersynergy/universal-agent-token-
 ⚡ MiniMax M2.7:  $0.05/M tokens → Token-Sparmaßnahmen KOSTEN Zeit
 ```
 
-**Bei schnellen, günstigen APIs** → Geschwindigkeit vor Effizienz
+**Bei schnellen, günstigen APIs** → Geschwindigkeit vor Effizienz  
 **Bei teuren APIs** → Volle Token-Optimierung aktivieren
+
+---
+
+## Token Saving Stack (2025–2026)
+
+Three tools attack three different token problems. Stack all three for maximum savings.
+
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  TOKEN PROBLEM          TOOL              SAVINGS               │
+├─────────────────────────────────────────────────────────────────┤
+│  OUTPUT verbosity       caveman           65% avg (22–87%)      │
+│  INPUT flooding         context-mode      98% tool output       │
+│  CLI bash noise         RTK               60–90% (optional)     │
+└─────────────────────────────────────────────────────────────────┘
+```
+
+### How they differ
+
+| Layer | Tool | What it compresses | When |
+|-------|------|--------------------|------|
+| Output | **caveman** | Agent *responses* — drops articles, filler, hedging | Every response |
+| Input | **context-mode** | Tool results (Bash/Read/Grep/WebFetch) — sandboxed via MCP | Every tool call |
+| CLI | **RTK** | Raw bash output before it hits LLM | Bash only |
+
+> **RTK + context-mode overlap:** context-mode intercepts ALL tools automatically via hooks including Bash. RTK is additive only for non-Claude-Code terminals or standalone CLI usage outside the MCP sandbox.
+
+---
+
+## caveman — 65% Output Token Savings
+
+> why use many token when few do trick
+
+One-line install. Auto-activates every session via SessionStart hook.
+
+```bash
+claude plugin marketplace add JuliusBrussee/caveman && claude plugin install caveman@caveman
+```
+
+### Official Benchmarks (10 real API calls)
+
+| Task | Normal | Caveman | Saved |
+|------|-------:|--------:|------:|
+| Explain React re-render bug | 1,180 | 159 | **87%** |
+| Fix auth middleware token expiry | 704 | 121 | **83%** |
+| Set up PostgreSQL connection pool | 2,347 | 380 | **84%** |
+| Explain git rebase vs merge | 702 | 292 | 58% |
+| Refactor callback to async/await | 387 | 301 | 22% |
+| Architecture: microservices vs monolith | 446 | 310 | 30% |
+| Review PR for security issues | 678 | 398 | 41% |
+| Docker multi-stage build | 1,042 | 290 | **72%** |
+| Debug PostgreSQL race condition | 1,200 | 232 | **81%** |
+| Implement React error boundary | 3,454 | 456 | **87%** |
+| **Average** | **1,214** | **294** | **65%** |
+
+*Source: [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman) — reproducible via `uv run python evals/llm_run.py`*
+
+### Intensity Levels
+
+| Level | Drop | Savings |
+|-------|------|---------|
+| `lite` | Articles, filler words | ~40% |
+| `full` | Articles + fragments OK + short synonyms | ~65% |
+| `ultra` | Maximum compression, telegram-style | ~75% |
+| `wenyan` | Classical Chinese mode | ~75% |
+
+Switch: `/caveman lite` · `/caveman ultra` · `stop caveman`
+
+### caveman-compress (Input Savings)
+
+`caveman-compress` rewrites CLAUDE.md / memory files in caveman format — cuts **~46% of input tokens** every session without losing any technical substance.
+
+```bash
+# Compress a memory/instruction file
+/caveman:compress ~/.claude/CLAUDE.md
+```
+
+### Key Insight
+
+> Caveman only affects **output tokens** — thinking/reasoning tokens untouched. Caveman make *mouth* smaller, not brain smaller. A March 2026 paper found brevity constraints improved accuracy by **26 percentage points** on certain benchmarks.
+
+---
+
+## context-mode — 98% Context Reduction (v1.0.89)
+
+> 315 KB of tool output → 5.4 KB. Everything else stays in a SQLite/FTS5 sandbox.
+
+```bash
+/plugin marketplace add mksglu/context-mode
+/plugin install context-mode@context-mode
+```
+
+**The Problem:** Every MCP tool call dumps raw data into context. Playwright snapshot = 56 KB. 20 GitHub issues = 59 KB. One access log = 45 KB. After 30 min, 40% of context is gone — and when the agent compacts, it forgets what it was doing.
+
+**The Solution:** 3-sided attack:
+1. **Context Saving** — sandbox keeps raw data out of window
+2. **Session Continuity** — file edits, git ops, tasks tracked in SQLite; retrieved via BM25 search on compaction
+3. **Think in Code** — agent writes scripts to count/analyze, not reads 50 files into context
+
+### Tools
+
+| Tool | Purpose |
+|------|---------|
+| `ctx_batch_execute` | N commands + queries in ONE call (primary gather) |
+| `ctx_search` | BM25 search across indexed output |
+| `ctx_execute` | Run analysis code in sandbox |
+| `ctx_execute_file` | Same, on a file path |
+| `ctx_fetch_and_index` | WebFetch replacement — stores + indexes |
+| `ctx_index` | Manually index file/dir |
+| `ctx_stats` | Session token savings breakdown |
+| `ctx_doctor` | Install health diagnostics |
+| `ctx_upgrade` | Pull latest + rebuild |
+| `ctx_purge` | Clear sandbox index |
+| `ctx_insight` | 15+ metric analytics dashboard |
+
+**Rule:** 2+ commands → `ctx_batch_execute`. Never multiple Bash calls.
+
+### Upgrade
+
+```bash
+/ctx-upgrade
+# or
+/context-mode:ctx-upgrade
+```
+
+---
+
+## RTK Universal — 60–90% CLI Compression
+
+> For expensive APIs (Claude, OpenAI). Optional for fast cheap APIs.
+
+**Status:** Largely superseded by context-mode for Claude Code users. context-mode intercepts all tools (including Bash) automatically. RTK still valuable for:
+- Standalone terminal use outside Claude Code
+- Non-MCP environments
+- Specific CLI output shaping (git, docker, kubectl)
+
+```bash
+rtk-universal install     # Install hook
+rtk-universal wrap <cmd>  # Compress single command
+rtk-universal stats       # Show savings
+```
+
+### Command Mapping
+
+| Original | RTK Compressed | Savings |
+|----------|---------------|---------|
+| `git status` | `git status -sb` | 60% |
+| `git log` | `git log --oneline` | 75% |
+| `ls -la` | `ls -1` | 80% |
+| `pytest -v` | `pytest -q --tb=short` | 85% |
+| `npm install` | `npm install --silent` | 90% |
+| `cargo test` | `cargo test --message-format=short` | 80% |
+
+### When to use RTK vs context-mode
+
+```
+Claude Code + context-mode installed → use ctx_batch_execute, skip RTK for bash
+Non-Claude-Code terminal              → use RTK
+Both installed                        → RTK handles raw terminal, ctx handles LLM tools
+```
 
 ---
 
 ## Adaptive Model Selection
 
-Wähle das optimale Modell basierend auf:
-
 | Factor | Decision |
 |--------|----------|
 | API-Key/Provider | MiniMax = ⚡ Speed, Claude = 💰 Savings |
-| Task-Komplexität | Simple → Fast, Complex → Smart |
-| Geschwindigkeitsanforderung | High → Schnellster Provider |
-| Code-Qualität | Draft → Schnell, Production → Qualität |
+| Task complexity | Simple → Fast, Complex → Smart |
+| Speed requirement | High → Fastest provider |
+| Code quality | Draft → Fast, Production → Quality |
 
 ---
 
@@ -61,21 +219,19 @@ Wähle das optimale Modell basierend auf:
 
 | Provider | Model | Speed | Cost/M | Token Savings | Best For |
 |----------|-------|-------|--------|--------------|----------|
-| **MiniMax** | M2.7 | ⚡⚡⚡⚡⚡ | $0.05 | **Keine nötig** | High-Volume, Speed |
+| **MiniMax** | M2.7 | ⚡⚡⚡⚡⚡ | $0.05 | **None needed** | High-Volume, Speed |
 | **Google** | Gemini 3 Flash | ⚡⚡⚡⚡ | $0.07 | Minimal | Quick Tasks |
 | **Google** | Gemini 3 Pro | ⚡⚡⚡ | $1.00 | 60% | Complex Reasoning |
-| **Anthropic** | Claude Sonnet 4.6 | ⚡⚡⚡ | $3.00 | **60-90%** | Production Code |
-| **Anthropic** | Claude Opus 4.6 | ⚡⚡ | $15.00 | **60-90%** | Architecture |
-| **Anthropic** | Claude Haiku 4.5 | ⚡⚡⚡⚡ | $1.00 | **60-90%** | Fast Agents |
-| **OpenAI** | GPT-4o | ⚡⚡⚡ | $2.50 | **60-90%** | General Tasks |
+| **Anthropic** | Claude Sonnet 4.6 | ⚡⚡⚡ | $3.00 | **60–90%** | Production Code |
+| **Anthropic** | Claude Opus 4.6 | ⚡⚡ | $15.00 | **60–90%** | Architecture |
+| **Anthropic** | Claude Haiku 4.5 | ⚡⚡⚡⚡ | $1.00 | **60–90%** | Fast Agents |
+| **OpenAI** | GPT-4o | ⚡⚡⚡ | $2.50 | **60–90%** | General Tasks |
 | **Moonshot** | Kimi K2.5 | ⚡⚡⚡⚡ | $0.50 | Minimal | Code Generation |
 | **DeepSeek** | Coder | ⚡⚡⚡⚡ | $0.14 | Minimal | Code Completion |
 
 ---
 
 ## Supported CLI Agents
-
-> Same savings. Every CLI. Every model.
 
 | Agent | Icon | Config Path | Optimization |
 |-------|------|------------|--------------|
@@ -98,30 +254,23 @@ Wähle das optimale Modell basierend auf:
 curl -fsSL https://raw.githubusercontent.com/Supersynergy/universal-agent-token-saver/main/install-universal.sh | bash
 ```
 
-### 2. Check Your Model
+### 2. Install caveman (Claude Code)
+
+```bash
+claude plugin marketplace add JuliusBrussee/caveman && claude plugin install caveman@caveman
+```
+
+### 3. Install context-mode (Claude Code)
+
+```bash
+/plugin marketplace add mksglu/context-mode && /plugin install context-mode@context-mode
+```
+
+### 4. Check your stack
 
 ```bash
 uts check
-# Output:
-# {
-#   "model": "minimax-m2.7",
-#   "provider": "MiniMax",
-#   "enableTokenSavings": false,
-#   "reason": "Fast provider - no token savings needed"
-# }
-```
-
-### 3. Adaptive Select
-
-```bash
-# Quick task → Fastest model
-uts select simple fastest
-
-# Production code → Best quality
-uts select complex balanced 50000 production
-
-# Exploration → Fast + cheap
-uts select simple fast 10000 draft
+/ctx-doctor
 ```
 
 ---
@@ -151,18 +300,18 @@ uts select simple fast 10000 draft
 
 | Provider | Strategy | Why |
 |----------|----------|-----|
-| MiniMax | **None** | $0.05/M = billig, Geschwindigkeit > Effizienz |
-| Google | Minimal | $0.07-1.25/M = moderat |
-| Anthropic | **Full** | $3-15/M = teuer, Token-Sparen lohnt sich |
-| OpenAI | **Full** | $2.50-75/M = teuer, Token-Sparen lohnt sich |
+| MiniMax | **None** | $0.05/M = cheap, speed > efficiency |
+| Google | Minimal | $0.07–1.25/M = moderate |
+| Anthropic | **Full** | $3–15/M = expensive, savings pay off |
+| OpenAI | **Full** | $2.50–75/M = expensive, savings pay off |
 
 ### 🔧 Multi-CLI Vault System
 
 ```
 ~/.uts/vault/
-├── skills/           # Universal skills (CLI-agnostisch)
-├── commands/         # CLI-spezifische Commands
-└── adapters/        # Einer pro CLI-Tool
+├── skills/           # Universal skills (CLI-agnostic)
+├── commands/         # CLI-specific commands
+└── adapters/        # One per CLI tool
     ├── claude.js
     ├── gemini.js
     ├── kilo.js
@@ -175,49 +324,14 @@ uts select simple fast 10000 draft
 
 | Command | Description |
 |---------|-------------|
-| `/uts check` | Prüfe aktuelles Modell & Strategie |
-| `/uts select` | Adaptives Model Selection |
-| `/uts strategy` | Zeige Provider-Strategie |
-| `/uts list` | Alle verfügbaren Modelle |
-| `/uts agents` | Zeige installierte CLI-Agenten |
-| `/uts install` | UTS für CLI installieren |
-| `/uts dashboard` | Multi-Agent Token Dashboard |
-| `/uts upgrade` | Update auf latest |
-
----
-
-## RTK Universal — 60-90% CLI Compression
-
-> Für teure APIs (Claude, OpenAI) — optional für schnelle APIs
-
-### Automatic Hook
-
-```bash
-# RTK Universal erkennt den aktiven CLI automatisch
-rtk-universal install     # Installiert Hook
-rtk-universal wrap <cmd>  # Einzelne Command komprimieren
-rtk-universal stats       # Savings anzeigen
-```
-
-### Command Mapping
-
-| Original | RTK Compressed | Savings |
-|----------|---------------|---------|
-| `git status` | `git status -sb` | 60% |
-| `git log` | `git log --oneline` | 75% |
-| `ls -la` | `ls -1` | 80% |
-| `pytest -v` | `pytest -q --tb=short` | 85% |
-| `npm install` | `npm install --silent` | 90% |
-| `cargo test` | `cargo test --message-format=short` | 80% |
-
-### Output Filter
-
-| CLI | Noise Removed | Savings |
-|-----|---------------|---------|
-| git | Merging, fast-forward, remote: | 70% |
-| npm | `added X packages`, warnings | 85% |
-| pytest | `passed X tests`, platform info | 85% |
-| docker | `Pulling from layer`, Digest | 90% |
+| `/uts check` | Check current model & strategy |
+| `/uts select` | Adaptive model selection |
+| `/uts strategy` | Show provider strategy |
+| `/uts list` | All available models |
+| `/uts agents` | Show installed CLI agents |
+| `/uts install` | Install UTS for CLI |
+| `/uts dashboard` | Multi-agent token dashboard |
+| `/uts upgrade` | Update to latest |
 
 ---
 
@@ -243,29 +357,6 @@ curl_cffi → camoufox → domshell → browser (fail-forward)
 | + catboost noise filter | — | 40 tok | **3,666x** |
 | + gemma summary gate | — | 2 tok | **~73,333x** |
 
-See [HYPERSTACK.md](./HYPERSTACK.md) for architecture, agent team roles (frontliner/deep_diver/heavy_lifter), cost model, and integration guide.
-
----
-
-## context-mode — 98% Context Reduction
-
-> 10 MCP tools that keep raw tool output in a sandbox instead of flooding your context window.
-
-| Tool | Purpose |
-|------|---------|
-| `ctx_batch_execute` | Run N commands + queries in ONE call (primary gather) |
-| `ctx_search` | Fuzzy search across indexed output (many queries, one call) |
-| `ctx_execute` | Run code/shell in sandbox (analysis, API calls, log parsing) |
-| `ctx_execute_file` | Same, but on a file path |
-| `ctx_fetch_and_index` | Replacement for WebFetch — stores + indexes pages |
-| `ctx_index` | Manually index a file/dir into the sandbox |
-| `ctx_stats` | Show session token savings |
-| `ctx_doctor` | Diagnose install health |
-| `ctx_upgrade` | Update context-mode |
-| `ctx_purge` | Clear sandbox index |
-
-**Rule**: 2+ commands → `ctx_batch_execute`. Never use multiple Bash calls.
-
 ---
 
 ## beads (bd) — Task Tracking + Memory
@@ -281,7 +372,44 @@ bd remember "..."           # Persistent cross-session memory
 bd memories <keyword>
 ```
 
-Pairs with CTS: `bd` tracks the work, `context-mode` keeps the output out of your window, `RTK` compresses the commands.
+Pairs with CTS: `bd` tracks the work, `context-mode` keeps output out of window, `RTK` compresses standalone CLI.
+
+---
+
+## Token Math
+
+### Expensive API (Claude) — Full Stack
+
+```
+Before stack:  ~35,000 tokens/session overhead
+After caveman: ~12,250 tokens (65% output reduction)
+After ctx-mode: ~5,400 tokens (98% tool output reduction)
+After RTK:     ~4,000 tokens (bash noise removed)
+
+At 1,000 sessions/month:  31M tokens saved
+At Sonnet pricing ($3/M):  ~$93/month saved
+At Opus pricing  ($15/M): ~$465/month saved
+```
+
+### Fast API (MiniMax)
+
+```
+Token savings: NOT ACTIVATED
+Reason: $0.05/M = waste of time to optimize
+Use caveman for speed/readability, not cost
+```
+
+---
+
+## Decision Matrix
+
+| Task Type | Fast API | Expensive API |
+|-----------|----------|---------------|
+| Quick Fix | MiniMax M2.7 ⚡ | Claude Haiku 💰 |
+| Exploration | Gemini 3 Flash ⚡ | Claude Sonnet 💰 |
+| Code Generation | Kimi K2.5 ⚡ | Claude Sonnet 💰 |
+| Production | Gemini 3 Pro ⚡ | Claude Sonnet 💰 |
+| Architecture | Gemini 3 Pro ⚡ | Claude Opus 💰 |
 
 ---
 
@@ -296,22 +424,14 @@ curl -fsSL https://raw.githubusercontent.com/Supersynergy/universal-agent-token-
 ### CLI-Specific
 
 ```bash
-# Nur Gemini CLI
+# Gemini CLI only
 curl -fsSL ... | bash -s -- --adapter=gemini
 
-# Nur Claude Code
+# Claude Code only
 curl -fsSL ... | bash -s -- --adapter=claude
 
-# Alle CLIs
+# All CLIs
 curl -fsSL ... | bash -s -- --adapter=all
-```
-
-### CLI-Commands
-
-```bash
-uts install          # Aktuellen CLI
-uts install gemini   # Spezifischen CLI
-uts uninstall        # UTS entfernen
 ```
 
 ---
@@ -338,7 +458,7 @@ uts uninstall        # UTS entfernen
 
 ### Provider Strategies
 
-**MiniMax (Schnellster Provider)**
+**MiniMax (Fastest)**
 ```json
 {
   "provider": "MiniMax",
@@ -349,14 +469,14 @@ uts uninstall        # UTS entfernen
 }
 ```
 
-**Anthropic (Teuerste Option)**
+**Anthropic (Full Stack)**
 ```json
 {
   "provider": "Anthropic",
   "tokenSavings": "full",
   "cacheStrategy": "aggressive",
   "batchStrategy": "always",
-  "recommendedModel": "claude-3.5-sonnet"
+  "recommendedModel": "claude-sonnet-4-6"
 }
 ```
 
@@ -387,49 +507,12 @@ universal-agent-token-saver/
 
 ---
 
-## Token Math
-
-### Expensive API (Claude)
-
-```
-Before UTS:  ~35,000 tokens/session overhead
-After UTS:   ~4,000  tokens/session overhead
-Savings:     ~31,000 tokens/session
-
-At 1,000 sessions/month:  31M tokens saved
-At Sonnet pricing ($3/M):  ~$93/month saved
-At Opus pricing  ($15/M): ~$465/month saved
-```
-
-### Fast API (MiniMax)
-
-```
-Token-Sparmaßnahmen: NICHT AKTIVIERT
-Grund: $0.05/M tokens = Zeitverschwendung zu sparen
-
-Instead: Nutze MiniMax M2.7 für 300x günstigere Speed-Tasks
-```
-
----
-
-## Decision Matrix
-
-| Task Type | Fast API | Expensive API |
-|-----------|----------|---------------|
-| Quick Fix | MiniMax M2.7 ⚡ | Claude Haiku 💰 |
-| Exploration | Gemini 3 Flash ⚡ | Claude Sonnet 💰 |
-| Code Generation | Kimi K2.5 ⚡ | Claude Sonnet 💰 |
-| Production | Gemini 3 Pro ⚡ | Claude Sonnet 💰 |
-| Architecture | Gemini 3 Pro ⚡ | Claude Opus 💰 |
-
----
-
 ## Requirements
 
 - Node.js ≥ 16
-- Python 3.8+ (optional, für Stats)
+- Python 3.8+ (optional, for stats)
 - macOS / Linux / WSL
-- Einen oder mehr CLI Coding Agents installiert
+- One or more CLI coding agents installed
 
 ---
 
@@ -437,7 +520,7 @@ Instead: Nutze MiniMax M2.7 für 300x günstigere Speed-Tasks
 
 ```bash
 uts upgrade
-# oder
+# or
 curl -fsSL https://raw.githubusercontent.com/Supersynergy/universal-agent-token-saver/main/install-universal.sh | bash
 ```
 
@@ -453,57 +536,25 @@ bash ~/.uts-backup-YYYYMMDD-HHMMSS/restore.sh
 
 ## Links
 
-- **GitHub**: [github.com/Supersynergy/universal-agent-token-saver](https://github.com/Supersynergy/universal-agent-token-saver)
+- **GitHub**: [github.com/Supersynergy/claude-token-saver](https://github.com/Supersynergy/claude-token-saver)
 - **Docs**: [UTS.md](./UTS.md)
-- **Best Practices**: [BEST_PRACTICES.md](./BEST_PRACTICES.md)
+- **caveman plugin**: [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman)
+- **context-mode**: [mksglu/context-mode](https://github.com/mksglu/context-mode)
 
 ---
 
-## 🙏 Acknowledgments
+## Acknowledgments
 
-This project stands on the shoulders of giants. Special thanks to:
-
-### Core Technologies We Built Upon
-
-| Project | Thanks To | URL |
-|---------|----------|-----|
-| **RTK (Rust Token Killer)** | 60-90% CLI compression | [rtk-ai.app](https://rtk-ai.app) |
-| **context-mode** | 98% context reduction, 10 tools | MCP Server |
-| **shellfirm** | Destructive command protection | [jondot/shellfirm](https://github.com/jondot/shellfirm) |
-| **claude-hud** | Token HUD display | Claude Plugins |
-| **claude-mem** | Memory system | Claude Plugins |
-| **beads (bd)** | Issue tracking + persistent memory | Workflow CLI |
-
-### CLI Agents We Support
-
-| Agent | Maintainer | Note |
-|-------|------------|------|
-| **Claude Code** | Anthropic | Primary target |
-| **Gemini CLI** | Google | OpenTelemetry support |
-| **Kilo/Code** | Kilo Org | #1 on OpenRouter |
-| **OpenCode** | Open Source | MIT Licensed |
-| **Codex CLI** | OpenAI | Rust-based |
-| **Kimi Code** | Moonshot AI | Agent Tracing |
-| **OpenClaw** | Community | Clawdbot/Moltbot |
-| **Hermes** | Community | SQLite-based |
-
-### Inspiration & Ideas
-
-| Project | Concept |
-|---------|---------|
-| **Tokscale** | Multi-agent token tracking |
-| **token-saver.ai** | Output compression |
-| **OpenCode Monitor** | Real-time analytics |
-| **portkey.ai** | Model governance |
-
-### The Community
-
-- All contributors to the AI coding agent ecosystem
-- Everyone who shares token-saving tips
-- The developers building these amazing tools
+| Project | What it does |
+|---------|-------------|
+| **caveman** | 65% output token savings, auto-activates via SessionStart hook |
+| **context-mode** | 98% context reduction, 10 MCP sandbox tools, session continuity |
+| **RTK (Rust Token Killer)** | 60-90% CLI bash output compression |
+| **shellfirm** | Destructive command protection |
+| **beads (bd)** | Issue tracking + persistent memory |
 
 ---
 
-**Made with obsession for developer efficiency.**
-⚡ Speed or 💰 Savings — You Choose.
+**Made with obsession for developer efficiency.**  
+⚡ Speed or 💰 Savings — You Choose.  
 **Universal Agent Token Saver** — *Every CLI. Every Model.*
