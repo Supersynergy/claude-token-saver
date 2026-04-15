@@ -44,6 +44,66 @@ curl -fsSL https://raw.githubusercontent.com/Supersynergy/universal-agent-token-
 
 ---
 
+## Full Stack Timing Benchmarks
+
+Real measured latency + token counts (M4 Max, macOS 24.5, 2026-04-15):
+
+```
+Tool/Command              Avg ms    Bytes    Est tok    vs baseline
+──────────────────────────────────────────────────────────────────
+raw ls -la                  6ms    4,865     1,216t     (baseline)
+rtk ls                     10ms    1,861       465t      -62% ✓
+raw git status             12ms      100        25t     (baseline)
+rtk git status             23ms       47        11t      -53% ✓
+raw curl (small API)      814ms      429       107t     (baseline)
+rtk curl --schema         957ms      157        39t      -63% ✓
+hyperfetch/curl_cffi     1461ms      626       156t      +46% ✗ small page
+hyperfetch/camoufox      3460ms      612       153t      +43% ✗ small page
+raw cat (head -100 lines)   4ms    4,406     1,101t     (baseline)
+rtk read (FULL FILE)        8ms   22,541     5,635t     +412% ✗✗ BUG
+ctx_batch_execute (1 call)  3ms       40        10t      -99% ✓✓✓
+```
+
+### Critical findings from benchmarks
+
+**`rtk read` is broken for token saving** — loads full file + metadata = 5,635t vs 1,101t raw = 5x WORSE. Never use `rtk read`. Use the native `Read` tool instead.
+
+**`hyperfetch` hurts on small responses** — httpbin.org/json raw = 107t, hyperfetch = 156t (+46%). Gemma gate overhead exceeds savings for tiny API responses. `CTS_GEMMA_THRESHOLD=200` is already correctly set. hyperfetch only pays off on large pages (full HTML, docs, dashboards).
+
+**`rtk curl` is the sweet spot for APIs** — -63% tokens, only +18% slower. Best when you need JSON structure/schema. For specific fact extraction from large pages: `hyperfetch --extract "field"`.
+
+**`ctx_batch_execute` is fastest AND smallest** — 3ms, 10t for any N commands. Replaces both Bash calls and research subagents.
+
+---
+
+## Hook Architecture Audit
+
+Current: **39 hooks across 9 events**. PreToolUse [Bash] runs **6 hooks serially** = 25–100ms overhead per Bash call.
+
+```
+PreToolUse [Bash] — serial execution order:
+  1. hyperstack-pretool.sh   (WebFetch intercept, exit 0 for non-web)
+  2. rtk-rewrite.sh          (RTK auto-rewrite via Rust binary) ← CANONICAL
+  3. ctx-optimizer.sh        (blocks large-output bash)
+  4. context-mode hook       (MCP routing enforcement)
+  5. tokenguard-auto.sh      (RTK rewrite v2.0) ← REDUNDANT with #2
+  6. shellfirm               (destructive command guard)
+
+SessionStart: 11 hooks (costly — 11 process forks at startup)
+```
+
+### Optimizations
+
+**A. Remove `tokenguard-auto.sh` from PreToolUse** — `rtk-rewrite.sh` delegates to the Rust `rtk rewrite` binary (single source of truth in `src/discover/registry.rs`). `tokenguard-auto.sh` is a Bash reimplementation of the same logic. Remove the duplicate.
+
+**B. `rtk read` — exclude from usage** — add rule to `ctx-optimizer.sh` blocking `cat`/`head` in Bash and `rtk read` calls; suggest native `Read` tool.
+
+**C. hyperfetch — add URL size hint** — only suggest hyperfetch for non-API-endpoint URLs (skip `/json`, `/get`, `/status/*`, `/health`, `/ping`).
+
+**D. SessionStart — parallel launch** — 11 serial hooks can run in parallel with `&` + `wait`. Goal: <500ms total startup overhead.
+
+---
+
 ## Token Saving Stack (2025–2026)
 
 Four layers attack four different token problems. Mix and match by use case.
@@ -54,7 +114,7 @@ Four layers attack four different token problems. Mix and match by use case.
 ├─────────────────────────────────────────────────────────────────────┤
 │  OUTPUT verbosity       caveman           65% avg (22–87%)          │
 │  INPUT flooding         context-mode      98% tool output           │
-│  CLI bash noise         RTK               75% bash (optional)       │
+│  CLI bash noise         RTK               62–99% (command-specific) │
 │  Scrape/noise pre-sort  catboost          extra 25–50% on input     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
@@ -100,6 +160,18 @@ Prices: Opus $15/M · Sonnet $3/M · catboost v1.2.10 installed locally.
 - **RTK** adds ~4% on top of full stack — worth it for bash-heavy workflows only
 - **catboost** pre-filter: additional 0.6% on already-optimized stack. Real value is for raw scraping pipelines before ctx-mode sees them
 - **hyperstack chain** hits 93% — but only relevant for web-heavy agent sessions
+
+### hyperfetch: when to use which tool
+
+```
+URL type                     Tool                      Why
+──────────────────────────────────────────────────────────────────────
+Small API (/json, /health)   rtk curl -s <url>         -63% tok, no Gemma
+Large page (HTML/docs)       hyperfetch --stage c..    +94% tok savings
+Specific fact needed         hyperfetch --extract ".."  5-10t result only
+Anti-bot target              hyperfetch --stage cam..  0.07s, stealth
+Interactive/SPA              dsh (DOMShell REPL)       stateful, JSON
+```
 
 ### Optimal Config by Use Case
 
