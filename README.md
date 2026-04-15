@@ -590,6 +590,80 @@ curl_cffi → camoufox → domshell → browser (fail-forward)
 
 ---
 
+## New Fused Tools (2026-04-15)
+
+### `smart-fetch` — auto-routing web fetch
+
+Replaces: `hyperfetch` + `rtk curl` + raw `curl` + `curl_cffi`
+
+```bash
+smart-fetch <url>                    # auto-detect JSON vs HTML
+smart-fetch <url> --mode json        # force JSON schema extract
+smart-fetch <url> --mode html        # force trafilatura clean text
+smart-fetch <url> --extract "field"  # targeted extraction
+```
+
+Attribution: [curl_cffi](https://github.com/yifeikong/curl_cffi) + [trafilatura](https://github.com/adbar/trafilatura) + [rtk](https://github.com/rtk-ai/rtk)
+
+Benchmark results (real, 2026-04-15):
+```
+raw curl /json:       107t, 814ms  (baseline)
+rtk curl /json:        39t, 889ms  -63%
+smart-fetch /json:      5t, 995ms  -95%  ← auto JSON schema
+smart-fetch /html:     35t, 213ms  -73%  ← trafilatura, no LLM
+hyperfetch+phi4mini:  153t,2670ms  +43%  ← WORSE on small APIs
+```
+
+Routing logic:
+```
+URL path matches /api/|/v1/|.json|/get|/status  →  curl_cffi + json.keys()  =  3-5t
+HTML page (article/doc)                          →  curl_cffi + trafilatura  =  35-200t
+Anti-bot target                                  →  curl_cffi chrome110      =  auto
+```
+
+### `sg` — smart grep (ayg + ripgrep auto-router)
+
+Replaces: `grep`, `rg`, `rtk grep` (proven +10,000% worse)
+
+```bash
+sg <pattern>              # auto-route: ayg (indexed) or rg (fallback)
+sg build .                # build ayg index once (~30s for large repos)
+sg stats                  # show routing decision
+sg <pattern> --force-ayg  # always use indexed search
+```
+
+Attribution: [ayg/aygrep](https://github.com/hemeda3/aygrep) — sparse n-gram indexed search, built for AI coding agents
+
+Benchmarks (ayg vs ripgrep):
+```
+Repo size           rg time    ayg time   speedup
+< 10k files         ~20ms      needs build  —
+10k-100k files      ~500ms     ~60ms        8x
+> 100k files        ~29s       ~60ms       460x  (Chromium, M3 Max warm)
+Linux kernel 40M    ~1.5s      ~6ms        250x  (hot)
+```
+
+Routing: `ayg_index/` present → ayg. Otherwise → rg. Build once: `sg build .`
+
+### RTK bad-rewrite patch
+
+`rtk-rewrite.sh` hook now intercepts RTK's Rust auto-rewriter before bad commands execute:
+
+```
+ls -la → rtk ls    BLOCKED  (+35% more tokens)  → use Glob tool
+grep   → rtk grep  BLOCKED  (+10,000% overhead)  → use Grep tool / sg
+env    → rtk env   BLOCKED  (+105% more bytes)   → use env | grep
+cat    → rtk read  BLOCKED  (+412% more tokens)  → use Read tool
+
+docker ps → rtk docker ps  ALLOWED  (-84% tokens)  ✓
+git diff  → rtk diff       ALLOWED  (-99% tokens)  ✓
+curl      → rtk curl       ALLOWED  (-63% tokens)  ✓
+cargo     → rtk cargo      ALLOWED  (-97% tokens)  ✓
+ps aux    → rtk ps         ALLOWED  (-50% tokens)  ✓
+```
+
+---
+
 ## Subagent Token Patterns
 
 Per subagent spawn: **30,000 tokens** ($0.45 Opus). Scale fast.
