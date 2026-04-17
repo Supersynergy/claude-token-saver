@@ -1,6 +1,6 @@
 # claude-token-saver — Master Specification
 # version: 2.1.0 | 2026-04-17 | author: Maxim Supersynergy
-# status: active | model: claude-sonnet-4-6
+# status: active | model: claude-sonnet-4-6 | latest: claude-opus-4-7
 
 ---
 
@@ -73,7 +73,7 @@ HTML noise in scraped data       100%       25%     -75%
 │  Classification→ CatBoost (20ms, CPU)               │
 │  API cheap     → claude-haiku-4-5 ($0.25/1M in)    │
 │  API quality   → claude-sonnet-4-6 ($3/1M in)      │
-│  API max       → claude-opus-4-6 ($15/1M in)       │
+│  API max       → claude-opus-4-7 ($15/1M in) LATEST│
 └─────────────────────────────────────────────────────┘
 ```
 
@@ -284,7 +284,7 @@ Task type?
 └── LLM reasoning required?
     ├── Simple / fast?         → claude-haiku-4-5 ($0.25/1M)
     ├── Code / balanced?       → claude-sonnet-4-6 ($3/1M)
-    └── Complex reasoning?     → claude-opus-4-6 ($15/1M)
+    └── Complex reasoning?     → claude-opus-4-7 ($15/1M) ← LATEST, 1M ctx
     └── Offline / free?        → phi4-mini Ollama (2.5GB, 0$)
 ```
 

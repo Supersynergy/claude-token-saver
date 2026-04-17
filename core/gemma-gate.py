@@ -4,17 +4,17 @@ gemma-gate.py — HTML/text summarizer gate for AI coding agent context windows.
 
 Pipeline (fastest → slowest, auto-escalates only when needed):
   1. trafilatura (0ms, no LLM)    → covers 90% of HTML pages
-  2. MLX local inference (~12ms)  → Qwen3-0.6B-4bit on Apple Silicon
-  3. Ollama fallback (~50ms)      → qwen3:0.6b or configured model
+  2. MLX local inference (~556ms) → Phi-4-mini-instruct on Apple Silicon
+  3. Ollama fallback (~1038ms)    → gemma3:270m or configured model
   4. Extractive fallback (0ms)    → regex signal extraction, no LLM
 
 CatBoost pre-filter: classifies chunks as signal vs noise BEFORE LLM sees them.
   Only activates for scraping pipelines (CTS_CATBOOST=1).
 
 Config (env vars):
-  CTS_GEMMA_MODEL       Ollama model name (default: qwen3:0.6b)
-  CTS_MLX_MODEL         MLX model path (default: mlx-community/Qwen3-1.7B-4bit)
-  CTS_MLX_FAST_MODEL    Small MLX model (default: mlx-community/Qwen3-0.6B-4bit)
+  CTS_GEMMA_MODEL       Ollama model name (default: gemma3:270m)
+  CTS_MLX_MODEL         MLX model path (default: mlx-community/Phi-4-mini-instruct-4bit)
+  CTS_MLX_FAST_MODEL    Small MLX model (default: mlx-community/Phi-4-mini-instruct-4bit)
   CTS_GEMMA_THRESHOLD   Token threshold to trigger LLM (default: 200)
   CTS_GEMMA_MAX_INPUT   Max chars fed to LLM (default: 4096)
   CTS_FORCE_LLM         1 = always use LLM even if trafilatura succeeds
@@ -41,7 +41,9 @@ from urllib.error import URLError
 
 # ── Config ────────────────────────────────────────────────────────────────────
 OLLAMA_URL    = os.environ.get("OLLAMA_URL", "http://127.0.0.1:11434")
-OLLAMA_MODEL  = os.environ.get("CTS_GEMMA_MODEL", "qwen3:0.6b")
+# gemma3:270m: 291MB, ~1038ms, 23t output, best tiny quality (2026-04-17 benchmark)
+# qwen3 (any size) REMOVED — thinking mode, 160t verbose, 1973ms — not instruct-tuned
+OLLAMA_MODEL  = os.environ.get("CTS_GEMMA_MODEL", "gemma3:270m")
 # Phi-4-mini-instruct: 2.2GB, ~35ms warm, 94% quality — best instruction-following for summarization
 # Benchmarked 2026-04-16 on M4 Max: 118t→55t (-53%), proper structured output
 # Qwen3-0.6B NOT suitable — fails instruction following, echoes input instead of summarizing
@@ -330,7 +332,7 @@ def summarize(text: str, mode: str = "summary") -> str:
         print(f"[gemma-gate] MLX {MLX_FAST}: {tokens_in}t→{estimate_tokens(result)}t ({ms}ms)", file=sys.stderr)
         return result
 
-    # ── Step 3: Ollama (qwen3:0.6b, ~50ms) ───────────────────────────────────
+    # ── Step 3: Ollama (gemma3:270m, ~1038ms, 23t output) ────────────────────
     result = try_ollama(cleaned, system)
     if result:
         ms = int((time.perf_counter() - t0) * 1000)

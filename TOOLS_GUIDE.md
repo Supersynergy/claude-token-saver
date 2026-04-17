@@ -350,7 +350,7 @@ DB:
 LLM (local):
   HTML summarization          → Phi-4-mini-instruct MLX (556ms, 94%)
   Quick extraction            → trafilatura (0ms, no LLM, 90%)
-  Ollama fallback             → qwen3:0.6b
+  Ollama fallback             → gemma3:270m (1038ms, 23t) ← qwen3 REMOVED (verbose)
 
 CATBOOST:
   Scraping pipelines          → CTS_CATBOOST=1  (-25% noise)
@@ -431,3 +431,35 @@ Class weights:     [1,2] recommended for precision-over-recall on signal detecti
 
 **Install:** `core/agent_token_guard.py` — zero dependencies beyond catboost (optional).
 **Test:** `python3 core/agent_token_guard.py`
+
+---
+
+## Model Reference (2026-04-17 — verified from Anthropic docs)
+
+### Claude API Models
+```
+Model                        API ID                        $/1M in   $/1M out  Notes
+─────────────────────────────────────────────────────────────────────────────────────
+Claude Opus 4.7  ← LATEST   claude-opus-4-7               $15       $75       1M ctx, 128k out, xhigh effort, 2576px vision
+Claude Sonnet 4.6            claude-sonnet-4-6             $3        $15       Daily driver, balanced
+Claude Haiku 4.5             claude-haiku-4-5-20251001     $0.25     $1.25     Fastest/cheapest, nearly free after stack
+```
+After -93% token stack: Opus=$1.05/100sess · Sonnet=$0.21 · Haiku=$0.018
+
+⚠️ `claude-opus-4-6` = LEGACY. Use `claude-opus-4-7`.
+
+### Local Models — No GPU (CPU/Ollama benchmarked 2026-04-17)
+```
+Model              Size    Speed     Output   Use case
+─────────────────────────────────────────────────────────────────────
+smollm2:135m       270MB   ~20ms     fast     Ultra-fast extraction, smallest
+gemma3:270m        291MB   ~1038ms   23t      Best tiny quality ← Ollama default
+smollm2:360m       725MB   ~994ms    36t      Fast extraction
+smollm2:1.7b       1.8GB   ~200ms    —        Larger smollm
+phi4-mini MLX      2.2GB   ~556ms    55t      Best quality/size ← primary MLX
+phi4-mini Ollama   2.5GB   ~800ms    —        MLX unavailable fallback
+granite3.2:2b      1.5GB   ~200ms    —        Code-focused tasks
+gemma4:e2b         7.2GB   slow      —        Heavy tasks, not for extraction
+```
+⚠️ qwen3 (ALL sizes) REMOVED: thinking mode, 160t verbose output, 1973ms — avoid.
+⚠️ gemma4:31b (19GB) = overkill for extraction, use for complex reasoning offline only.
