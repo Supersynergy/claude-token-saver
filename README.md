@@ -103,6 +103,19 @@ Anti-bot target                     → curl_cffi chrome110       = auto stealth
 
 Attribution: [curl_cffi](https://github.com/yifeikong/curl_cffi) · [trafilatura](https://github.com/adbar/trafilatura)
 
+### Layer 5: Adaptive Routing — *per-action* savings
+
+Layers 0–4 cut startup tokens. Layer 5 cuts per-action tokens by picking the
+cheapest tool/model/fetch-stage that actually works. Self-learning, universal,
+no personal data. Full docs: [ADAPTIVE.md](ADAPTIVE.md).
+
+```python
+from core.adaptive_router import fetch_stage, model_tier, detect_backfire
+fetch_stage(url)          # curl → curl_cffi → browser, learns per host
+model_tier(query)         # haiku / sonnet / opus by complexity
+detect_backfire("cat x")  # warn: use Read tool instead
+```
+
 ---
 
 ### sg — smart grep (ayg + rg auto-router)

@@ -8,6 +8,8 @@ export { default as GeminiAdapter } from './gemini-cli';
 export { default as KiloAdapter } from './kilo-code';
 export { default as CodexAdapter } from './codex';
 export { default as KimiAdapter } from './kimi-cli';
+export { default as HermesAdapter } from './hermes';
+export { default as GGCoderAdapter } from './ggcoder';
 
 // Registry für dynamisches Laden
 export const ADAPTER_REGISTRY = {
@@ -17,6 +19,8 @@ export const ADAPTER_REGISTRY = {
   opencode: () => import('./kilo-code'),
   codex: () => import('./codex'),
   kimi: () => import('./kimi-cli'),
+  hermes: () => import('./hermes'),
+  ggcoder: () => import('./ggcoder'),
   openclaw: () => import('./openclaw'), // TODO
 };
 

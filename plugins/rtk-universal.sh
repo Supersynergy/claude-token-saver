@@ -154,16 +154,17 @@ rewrite_cmd() {
   
   # CLI-spezifisches Mapping
   case "$cli" in
-    claude|kilo|codex)
-      # Nutze RTK wenn verfügbar
+    claude|kilo|codex|ggcoder|hermes)
+      # Nutze RTK + native stack-routing (super27 pattern)
       if command -v rtk &>/dev/null; then
-        # Spezielle Mappings
         case "$cmd_part" in
-          git)   echo "rtk git ${args_part:-$ultra}" ;;
-          ls)    echo "rtk ls ${args_part:-$ultra}" ;;
-          grep)  echo "rtk grep ${args_part:-$ultra}" ;;
-          find)  echo "rtk find ${args_part:-$ultra}" ;;
-          *)     echo "$original" ;;
+          git)    echo "rtk git ${args_part:-$ultra}" ;;
+          ls)     echo "rtk ls ${args_part:-$ultra}" ;;
+          grep)   echo "rtk grep ${args_part:-$ultra}" ;;
+          find)   echo "fd ${args_part}" ;;                       # fd 5× faster
+          curl)   echo "hyperfetch ${args_part} --stage curl_cffi --markdown" ;; # 78ms
+          wget)   echo "hyperfetch ${args_part} --stage curl_cffi --no-summary" ;;
+          *)      echo "$original" ;;
         esac
       else
         echo "$original"
