@@ -40,6 +40,34 @@ Baseline session: 143,000 tokens (35k output + 100k tool-input + 8k bash)
 
 ---
 
+## Verified Per-Model Savings (caveman:full only)
+
+64 real OpenRouter calls, 4 verbose tasks, 8 models. baseline vs `caveman:full`
+system message. Numbers are reproducible via `bench/eval_harness.py`.
+
+| Model | Base out tok | Caveman out tok | **Out save** | Cost save | Latency save | Tier |
+|---|---:|---:|---:|---:|---:|:---:|
+| gemini-2.5-flash | 222 | 44 | **−80%** | −78% | −56% | ★ S |
+| minimax-2.7 | 419 | 156 | **−63%** | −61% | −63% | ★ S |
+| sonnet-4.6 | 169 | 112 | −34% | −30% | −9% | A |
+| deepseek-v4-flash | 221 | 159 | −28% | −21% | −30% | A |
+| grok-4-fast | 281 | 234 | −17% | −10% | −39% | B |
+| glm-4.7 | 384 | 359 | −7% | −5% | +7% | B |
+| haiku-4.5 | 145 | 138 | −5% | −1% | +21% | C |
+| kimi-2.6 | 350 | 428 | **+22%** ❌ | +24% | +0% | F (backfire) |
+
+**Key finding**: caveman is model-dependent. Anthropic Sonnet, MiniMax, Gemini
+Flash, DeepSeek follow the system message rigorously. Moonshot Kimi (reasoning
+model) ignores or expands instructions — caveman INCREASES output. Adapter
+configs should mark `caveman_compatible` per model class.
+
+**Cheapest caveman:full call**: deepseek-v4-flash at **$0.000051/call**
+(13× cheaper than Sonnet-4.6 caveman, 36× cheaper than Sonnet baseline).
+
+Raw data: `bench/results/eval_*.json`.
+
+---
+
 ## Quick Start
 
 ### 1. One-command install
