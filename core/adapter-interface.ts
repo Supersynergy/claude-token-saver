@@ -208,3 +208,51 @@ export function filterOutput(cli: string, command: string, output: string): stri
   
   return filtered.trim();
 }
+
+/**
+ * Per-model profile: caveman compat + recommended cache strategy.
+ * Source: bench/results/eval_*.json (8-model OpenRouter eval, 2026-04).
+ * Caveman-incompatible models (e.g. Kimi reasoning) backfire — DO NOT enable.
+ */
+export interface ModelProfile {
+  caveman_compatible: boolean;
+  caveman_default: 'lite' | 'full' | 'ultra' | 'wenyan-full';
+  cache_ttl: '5m' | '1h';
+  context_window: number;
+  notes?: string;
+}
+
+export const MODEL_PROFILES: Record<string, ModelProfile> = {
+  'claude-opus-4-7':      { caveman_compatible: true,  caveman_default: 'ultra', cache_ttl: '1h', context_window: 1_000_000, notes: '1M ctx, ultra default for cost' },
+  'claude-sonnet-4-6':    { caveman_compatible: true,  caveman_default: 'full',  cache_ttl: '1h', context_window: 200_000, notes: 'follows system msg rigorously, -34% out' },
+  'claude-haiku-4-5':     { caveman_compatible: false, caveman_default: 'lite',  cache_ttl: '5m', context_window: 200_000, notes: 'tier C: only -5% save, skip caveman' },
+  'gemini-2.5-flash':     { caveman_compatible: true,  caveman_default: 'full',  cache_ttl: '5m', context_window: 1_000_000, notes: 'tier S: -80% out' },
+  'gemini-2.5-pro':       { caveman_compatible: true,  caveman_default: 'full',  cache_ttl: '5m', context_window: 2_000_000 },
+  'minimax-2.7':          { caveman_compatible: true,  caveman_default: 'full',  cache_ttl: '5m', context_window: 1_000_000, notes: 'tier S: -63% out' },
+  'deepseek-v4-flash':    { caveman_compatible: true,  caveman_default: 'wenyan-full', cache_ttl: '5m', context_window: 128_000, notes: 'Chinese tokenizer favors wenyan; cheapest at $0.000051/call' },
+  'deepseek-v4-pro':      { caveman_compatible: true,  caveman_default: 'wenyan-full', cache_ttl: '1h', context_window: 128_000 },
+  'grok-4-fast':          { caveman_compatible: true,  caveman_default: 'lite',  cache_ttl: '5m', context_window: 256_000, notes: 'tier B: only -17%' },
+  'glm-4.7':              { caveman_compatible: false, caveman_default: 'lite',  cache_ttl: '5m', context_window: 200_000, notes: 'tier B: -7% only' },
+  'kimi-2.6':             { caveman_compatible: false, caveman_default: 'lite',  cache_ttl: '5m', context_window: 200_000, notes: 'BACKFIRE: caveman INCREASES output +22% — disable' },
+};
+
+export function profileFor(model: string): ModelProfile {
+  return MODEL_PROFILES[model] || { caveman_compatible: false, caveman_default: 'lite', cache_ttl: '5m', context_window: 200_000 };
+}
+
+/**
+ * Build Anthropic prompt-cache header set.
+ * Use 1h TTL for stable system blocks (CLAUDE.md, tool defs).
+ * Per Anthropic 2026-04 docs: 1h blocks MUST precede 5m blocks in request.
+ * Beta header: extended-cache-ttl-2025-04-11 — write 2×, read 0.1×.
+ */
+export function cacheHeaders(ttl: '5m' | '1h' = '5m'): { anthropic_beta?: string; cache_control: { type: 'ephemeral'; ttl?: string } } {
+  if (ttl === '1h') {
+    return {
+      anthropic_beta: 'extended-cache-ttl-2025-04-11',
+      cache_control: { type: 'ephemeral', ttl: '1h' },
+    };
+  }
+  return { cache_control: { type: 'ephemeral' } };
+}
+

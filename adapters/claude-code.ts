@@ -34,7 +34,7 @@ const ADAPTER: CLIAdapter = {
           outputTokens: usage.outputTokens || 0,
           totalTokens: (usage.inputTokens || 0) + (usage.outputTokens || 0),
           cost: usage.cost || this.estimateCost(usage),
-          model: usage.model || 'claude-3-5-sonnet',
+          model: usage.model || 'claude-sonnet-4-6',
           timestamp: new Date(usage.timestamp || Date.now()),
         };
       }
@@ -170,13 +170,16 @@ const ADAPTER: CLIAdapter = {
 
   estimateCost(usage: any): number {
     const rates: Record<string, { in: number; out: number }> = {
+      'claude-haiku-4-5': { in: 0.25, out: 1.25 },
+      'claude-sonnet-4-6': { in: 3, out: 15 },
+      'claude-opus-4-7': { in: 15, out: 75 },
       'claude-3-5-haiku': { in: 0.25, out: 1.25 },
       'claude-3-5-sonnet': { in: 3, out: 15 },
       'claude-3-5-opus': { in: 15, out: 75 },
       'claude-3-7-sonnet': { in: 3, out: 15 },
     };
-    
-    const rate = rates[usage.model] || rates['claude-3-5-sonnet'];
+
+    const rate = rates[usage.model] || rates['claude-sonnet-4-6'];
     return (usage.inputTokens / 1_000_000) * rate.in + 
            (usage.outputTokens / 1_000_000) * rate.out;
   },

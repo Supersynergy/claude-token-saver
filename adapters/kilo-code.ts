@@ -176,7 +176,9 @@ const ADAPTER: CLIAdapter = {
     const rates: Record<string, { in: number; out: number }> = {
       'gpt-4.5': { in: 2.5, out: 10 },
       'gpt-4o': { in: 2.5, out: 10 },
-      'claude-3-5-sonnet': { in: 3, out: 15 },
+      'claude-sonnet-4-6': { in: 3, out: 15 },
+      'claude-opus-4-7': { in: 15, out: 75 },
+      'claude-haiku-4-5': { in: 0.25, out: 1.25 },
       'gemini-2.5-pro': { in: 1.25, out: 5 },
     };
     
