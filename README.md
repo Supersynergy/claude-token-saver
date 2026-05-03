@@ -1,6 +1,8 @@
-# claude-token-saver v2.0.0
+# claude-token-saver v2.1.0
 
 **88–93% token reduction for Claude Code sessions. Real benchmarks. Zero guessing.**
+
+> **CC 2.1.x compat (May 2026)**: tested on Claude Code 2.1.126 (Opus 4.7 / Sonnet 4.6 / Haiku 4.5). Pairs with new features: `/loop` self-pacing, `/ultrareview --json`, agent teams, auto-mode classifier, fullscreen TUI, skills progressive disclosure.
 
 ```bash
 bash <(curl -fsSL https://raw.githubusercontent.com/Supersynergy/claude-token-saver/main/install-optimized.sh)
@@ -8,16 +10,18 @@ bash <(curl -fsSL https://raw.githubusercontent.com/Supersynergy/claude-token-sa
 
 ---
 
-## The Stack
+## The Stack (verified versions May 2026)
 
 Four layers, each attacking a different token problem:
 
-| Layer | Tool | What it saves | Savings |
-|-------|------|--------------|---------|
-| Output verbosity | caveman | Agent responses — drops articles/filler/hedging | 65% avg |
-| Tool input flooding | context-mode | MCP sandbox — keeps raw tool output out of context | 98% |
-| CLI bash noise | RTK | Raw bash/cargo/docker output before LLM sees it | 62–99% per cmd |
-| HTML pre-filter | gemma-gate (MLX) | trafilatura → Phi-4-mini-instruct → Ollama fallback | 53–90% |
+| Layer | Tool | Version | What it saves | Savings |
+|-------|------|--------:|--------------|---------|
+| Output verbosity | caveman | 0.1.0 | Agent responses — drops articles/filler/hedging | 65% avg |
+| Tool input flooding | context-mode | **1.0.105** | MCP sandbox — keeps raw tool output out of context | 98% |
+| CLI bash noise | RTK | **0.37.2** | Raw bash/cargo/docker output before LLM sees it | 62–99% per cmd |
+| HTML pre-filter | gemma-gate (MLX) | phi4-mini-4bit | trafilatura → Phi-4-mini-instruct → Ollama fallback | 53–90% |
+
+> Run `/reload-plugins` after `cd ~/.claude/plugins/marketplaces/context-mode && rtk git pull` to bump context-mode without restart.
 
 ---
 
@@ -408,5 +412,70 @@ claude-token-saver/
 
 ---
 
+## CC 2.1.x Settings Hardening (v2.1.0+, May 2026)
+
+Apply these `~/.claude/settings.json` defaults for additional ~3-5K tok/turn + 1-2s latency cut on top of the 4-layer stack:
+
+```json
+{
+  "includeGitInstructions": false,
+  "companyAnnouncements": false,
+  "spinnerTipsEnabled": false,
+  "env": {
+    "CLAUDE_CODE_SUBPROCESS_ENV_SCRUB": "1"
+  },
+  "permissions": {
+    "defaultMode": "plan",
+    "allow": [
+      "Bash(git *)", "Bash(rtk *)", "Bash(cargo *)", "Bash(bun *)",
+      "Bash(uv *)", "Bash(npm *)", "Bash(rg *)", "Bash(fd *)",
+      "Bash(fzf *)", "Bash(bat *)", "Bash(mise *)"
+    ]
+  }
+}
+```
+
+**Hooks-Hygiene** (every-tool-call killers):
+- ❌ NO `npx <thing>` in `PreToolUse`/`PostToolUse` — spawns Node per tool call (2-5K tok + 500ms each)
+- ❌ NO redundant context-injectors on `PreToolUse` — `SessionStart` is enough
+- ✅ Stop / SubagentStop hooks: `async: true` (otherwise blocks exit)
+
+**Effort routing**:
+- Default `effort: low` (override Anthropic 2.1.117 `high` default → see `/effort low` or settings)
+- Use `ultrathink` keyword in prompt for high-effort turn
+- ❌ `/fast` NEVER (cost outweighs latency win)
+
+**Model tier (strict)**:
+- Haiku 4.5 → subagents, exploration, batch grep, file search, bash ops
+- Sonnet 4.6 → code writing, plan review (daily driver)
+- Opus 4.7 → architecture decisions ONLY
+
+**Context hygiene**:
+- `/compact <focus>` at ~60% (NOT 90%) — keep cache hits warm
+- `/clear` between unrelated tasks
+- `/btw` for side-questions (answer never enters history)
+- `Esc Esc → Summarize from here` for mid-session compact preserving early context
+- `MEMORY.md` hard cap < 200 lines (CC 2.1.83+ truncates at 25KB AND 200)
+
+---
+
+## Self-update Routine
+
+Run weekly:
+
+```bash
+# context-mode (currently 1.0.105 upstream, May 2026)
+cd ~/.claude/plugins/marketplaces/context-mode && rtk git pull && /reload-plugins
+
+# claude-token-saver
+cd ~/projects/claude-token-saver && rtk git pull
+
+# rtk autopatcher (CC version drift)
+~/.claude/bin/ggcoder-autopatch.mjs --check
+```
+
+---
+
 *Benchmarked on M4 Max · macOS Darwin 24.5 · Claude Sonnet 4.6 · 2026-04-16*
+*v2.1.0 hardening verified on Claude Code 2.1.126 (Opus 4.7) · 2026-05-03*
 *All numbers are real measurements, not estimates.*
