@@ -1,341 +1,324 @@
-# Universal Agent Token Saver — Best Practices
-
-> Synthesized from RTK, context-mode, claude-hud, shellfirm, vault pattern, and UTS.
-> Goal: maximum developer efficiency + safety — adaptive by provider.
+# SUPER BEST PRACTICES — Programmieren mit Claude Code 2.1.126
+**Datum**: 2026-05-03 · **Stack**: Opus 4.7 / Sonnet 4.6 / Haiku 4.5 · **Quellen**: [cc-bestpractices](2026-05-03-cc-bestpractices.md) · [tools-and-rss](2026-05-03-tools-and-rss.md) · [local-arsenal](2026-05-03-local-arsenal.md) · prior: `cc_best_practices_2184.md` (37d) + `feedback_cc_optimization.md` (50d)
 
 ---
 
-## ⚡ The New Philosophy
+## §0 SETTINGS-BASELINE (aus prior optimization, weiterhin gültig)
 
-```
-Fast API (MiniMax M2.7): Speed > Efficiency
-Expensive API (Claude):  Efficiency > Speed
-```
-
-**Rule**: Don't optimize tokens when time costs more than tokens.
-
----
-
-## The 5 Laws
-
-**1. Never load what you don't need right now.**
-Skills in vault = 0 tokens. Skills in hot = loaded every session. Only `sm.md` earns the hot seat.
-
-**2. Never make N calls when 1 batch call does the job.**
-`ctx_batch_execute` for 2+ Bash/Read ops. 5 calls → 1 call = 90% savings. No exceptions.
-
-**3. Never trust RTK to not exist.**
-Always write code assuming RTK is active. Add `-u` to grep/ls for ultra-compact. It's transparent — you lose nothing if RTK is absent.
-
-**4. Never skip shellfirm confirmation on destructive commands.**
-AI agents don't hesitate. shellfirm does. If shellfirm flags a command, read the blast radius before proceeding.
-
-**5. Always run `/sm init` at session start.**
-Indexes docs, activates all layers, shows savings dashboard. 30 seconds → 4M tokens saved.
-
----
-
-## Token Hierarchy (cheapest to most expensive)
-
-| Rank | Operation | Cost | When |
-|------|-----------|------|------|
-| 1 | Vault cold storage | **0** | All rarely-used skills |
-| 2 | `rg` on skills.idx | **~0** | Finding skills by keyword |
-| 3 | `ctx_search` | ~200 | Fuzzy/semantic skill search |
-| 4 | RTK Bash command | 60-90% less | Any CLI operation |
-| 5 | `ctx_batch_execute` | ~300 total | 2+ commands/reads |
-| 6 | `ctx_execute_file` | ~200 | Large file summarization |
-| 7 | `ctx_fetch_and_index` | ~300 | URL → indexed source |
-| 8 | `Read` (small files) | ~500-2K | Targeted file reads |
-| 9 | Explore agent (haiku) | ~5-15K | Multi-file codebase search |
-| 10 | General agent (sonnet) | ~50-200K | Complex multi-source research |
-
-**Rule**: Always use the cheapest option that solves the problem.
-
----
-
-## Vault Strategy
-
-### What belongs in vault (cold storage)
-Move skills you use less than once per day:
-
-```bash
-# Language-specific (only need when actively coding in that lang)
-/sm vault kotlin-patterns
-/sm vault laravel-tdd
-/sm vault django-patterns
-/sm vault swift-actor-persistence
-/sm vault springboot-tdd
-
-# Heavy meta skills (high token cost, rarely used)
-/sm vault token-budget-advisor     # ~209 tokens! Move it.
-/sm vault prompt-optimizer         # ~183 tokens
-
-# Industry/ops (situational)
-/sm vault logistics-exception-management
-/sm vault customs-trade-compliance
-/sm vault energy-procurement
-
-# Batch move everything except sm.md
-cd ~/.claude/skills
-for f in $(ls | grep -v "^sm\.md$"); do /sm vault $f; done
-/sm rebuild
-```
-
-### What stays hot
-Only skills you invoke literally every session:
-- `sm.md` — the skill manager itself (always hot)
-- A handful of daily-driver skills (max 5)
-
-### Rule of thumb
-If you haven't used a skill in 3 days → vault it. `/sm load` brings it back instantly.
-
----
-
-## ctx_batch_execute Patterns
-
-### Standard codebase scan (use at start of every task)
-```python
-ctx_batch_execute(commands=[
-  {"label": "structure",  "command": "find src/ -type f | head -30"},
-  {"label": "git",        "command": "git log --oneline -10"},
-  {"label": "status",     "command": "git status --short"},
-  {"label": "readme",     "command": "cat README.md"},
-  {"label": "deps",       "command": "cat package.json | python3 -c 'import json,sys; p=json.load(sys.stdin); [print(k) for k in p.get(\"dependencies\",{})]'"}
-], queries=["project structure", "recent changes", "dependencies"])
-```
-
-### Before fixing a bug
-```python
-ctx_batch_execute(commands=[
-  {"label": "error",    "command": "grep -r 'ERROR\\|Error\\|error' logs/ | tail -20"},
-  {"label": "relevant", "command": "rg 'function_name' src/ -n"},
-  {"label": "tests",    "command": "ls tests/"},
-  {"label": "git_blame","command": "git log --oneline --follow src/broken_file.py | head -5"}
-], queries=["error pattern", "function definition", "test coverage"])
-```
-
-### Multi-file analysis (replaces 10+ Read calls)
-```python
-ctx_batch_execute(commands=[
-  {"label": "main",    "command": "cat src/main.rs"},
-  {"label": "config",  "command": "cat src/config.rs"},
-  {"label": "types",   "command": "cat src/types.rs"},
-  {"label": "tests",   "command": "cat tests/integration.rs"}
-], queries=["main entry point", "config structure", "type definitions"])
-```
-
-### When NOT to use ctx_batch_execute
-- Single targeted read of a small known file → use `Read` directly
-- One-liner Bash check → let RTK handle it automatically
-- Searching for a specific function in a known file → `Grep` tool
-
----
-
-## RTK Best Practices
-
-RTK runs automatically — you don't need to think about it. But these maximize savings:
-
-```bash
-# Ultra-compact flag: +10-20% savings on output-heavy commands
-rg "pattern" src/ -u          # ultra-compact grep
-ls -la -u                     # ultra-compact dir listing
-git log --oneline -20 -u      # ultra-compact git log
-
-# Check your savings at any time
-rtk gain                      # current session savings
-rtk gain --graph              # 30-day trend
-rtk discover -a               # find missed opportunities
-
-# If RTK hook breaks
-rtk init -g                   # refresh hook to latest
-rtk verify                    # validate hook integrity
-```
-
----
-
-## shellfirm Best Practices
-
-### Commands that should ALWAYS trigger shellfirm review:
-- `rm -rf` anything (especially outside of node_modules)
-- `git push --force` or `git push --force-with-lease`
-- `git reset --hard`
-- `kubectl delete` any resource
-- `DROP TABLE` or `TRUNCATE`
-- `chmod -R 777`
-- `> file` (truncate) on important files
-
-### When shellfirm blocks a command:
-1. **Read the blast radius** — how many files/bytes affected?
-2. **Read the alternative** — shellfirm usually suggests a safer option
-3. **Confirm only if intentional** — solve the math challenge to proceed
-
-### Adjust policy for your workflow:
-```bash
-shellfirm check "rm -rf node_modules"   # manual check
-shellfirm explain-risk "git push -f"    # get MCP explanation
-shellfirm get-policy                    # view current rules
-```
-
-### In CI/CD (no shellfirm needed):
-```bash
-SHELLFIRM_SKIP=1 ./deploy.sh            # env var to skip in automation
-```
-
----
-
-## Model Routing (UTS — Adaptive)
-
-### By Provider Strategy
-
-| Provider | Token Savings | When to Use |
-|----------|--------------|-------------|
-| **MiniMax M2.7** | None needed | Speed-critical tasks, high volume |
-| **Google Gemini 3 Flash** | Minimal | Quick tasks, exploration |
-| **Anthropic Claude 3.5 Sonnet** | 60-90% | Production code, complex reasoning |
-| **Anthropic Claude 3.5 Opus** | 60-90% | Architecture, critical decisions |
-| **OpenAI GPT-4o** | 60-90% | General tasks |
-
-### Decision Matrix
-
-| Task Type | Fast API | Expensive API |
-|-----------|----------|--------------|
-| Quick Fix | MiniMax M2.7 ⚡ | Claude Haiku 💰 |
-| Exploration | Gemini 3 Flash ⚡ | Claude Sonnet 💰 |
-| Code Generation | Kimi K2.5 ⚡ | Claude Sonnet 💰 |
-| Production | Gemini 3 Pro ⚡ | Claude Sonnet 💰 |
-| Architecture | Gemini 3 Pro ⚡ | Claude Opus 💰 |
-
-### UTS Commands
-
-```bash
-uts check           # Check current model + strategy
-uts select simple   # Select model for simple task
-uts strategy        # Show provider strategy
-uts list            # List all models
-```
-
-```yaml
-# In skill frontmatter:
-model: haiku        # /sm, exploration, simple lookups
-model: sonnet       # code generation, multi-step plans (default)
-# Omit for Opus — only explicitly route to it
-```
-
-**New in UTS**: Use `/uts` for adaptive model selection across all CLI agents.
-
----
-
-## HUD Configuration
-
-The claude-hud shows 5 key panels:
-
-```
-[Project line]       workspace/dir  model  duration  speed
-[Context bar]        ████████░░ 72%  3.2K tokens
-[Usage windows]      5h: ████░ 45%  7d: ██░ 28%        ← the "2 usage windows"
-[Environment]        CLAUDE.md:1  rules:8  hooks:12
-[Extra label]        ⚡28K|ctx:83%|V:250|sf              ← CTS savings
-```
-
-### Customize HUD (`~/.claude/plugins/claude-hud/config.json`):
+**settings.json HARD-Defaults** (live seit 2026-03-26):
 ```json
 {
-  "lineLayout": "expanded",
-  "display": {
-    "showUsage": true,
-    "usageBarEnabled": true,
-    "showContextBar": true,
-    "contextValue": "percent",
-    "showSpeed": true,
-    "showTokenBreakdown": true
+  "includeGitInstructions": false,        // -2K tok system prompt (eigene git-rules in CLAUDE.md)
+  "companyAnnouncements": false,          // 0 startup noise
+  "spinnerTipsEnabled": false,            // 0 spinner tips in context
+  "env": {
+    "CLAUDE_CODE_SUBPROCESS_ENV_SCRUB": "1"  // strip API keys from subprocess env (security)
   },
-  "usage": {
-    "cacheTtlSeconds": 60
+  "permissions": {
+    "defaultMode": "plan",
+    "allow": ["Bash(git *)", "Bash(rtk *)", "Bash(bd *)", "Bash(mise *)",
+              "Bash(cargo *)", "Bash(bun *)", "Bash(hermes *)", "Bash(leads *)",
+              "Bash(npm *)", "Bash(rg *)", "Bash(fd *)", "Bash(fzf *)", "Bash(bat *)"]
   }
 }
 ```
 
-### HUD Extra Label key:
-- `⚡28K` = RTK saved 28K tokens this session
-- `ctx:83%` = context-mode achieved 83% reduction
-- `V:250` = 250 skills in vault (0 startup tokens)
-- `sf` = shellfirm active
+**Hooks-Hygiene** (per-tool overhead = death):
+- ❌ KEINE `npx <thing>` PreToolUse/PostToolUse Hooks (spawnte Node JEDES tool call → 2-5K tok + 500ms)
+- ❌ KEIN `gsd-context-monitor.js` PostToolUse (redundant)
+- ❌ KEIN `surreal-pretool-inject.sh` PreToolUse (nur SessionStart braucht context-inject)
+- ✅ Telegram Stop hook: `async: true`
+- ✅ SurrealDB Stop hook: `async: true`
+- ✅ SubagentStop: `async: true` (non-blocking)
+
+**Effort default**: `low` (NICHT high, override Anthropic 2.1.117 default). Use `ultrathink` keyword für high-effort turn.
+
+**Memory hard caps**:
+- `MEMORY.md` < 200 lines (index ONLY, details in topic files)
+- Auto-compact at 25KB AND 200 lines (CC built-in)
+
+**Model routing (strict)**:
+- Haiku 4.5 → subagents, exploration, file search, bash ops
+- Sonnet 4.6 → code writing, plan review (daily driver)
+- Opus 4.7 → architecture decisions ONLY
+- ❌ `/fast` NEVER (zu teuer, prior decision steht)
+
+**Context hygiene**:
+- `/compact <focus>` wenn Context füllt (focus = topic, NICHT generic)
+- `/clear` zwischen unrelated tasks
+- Specialized workflows → Skills (load on demand, NICHT in CLAUDE.md)
 
 ---
 
-## Session Workflow (optimal daily routine)
+## §1 GOLDEN STACK (top of funnel — alle Sessions)
 
 ```
-1. Start session:   /sm init
-                    → indexes RTK.md, skills-catalog, toolstack
-                    → shows all layers active + savings dashboard
-
-2. Start task:      ctx_batch_execute([...], queries=[...])
-                    → understand codebase in 1 call
-
-3. Find skill:      /sm search <keyword>   or   /sm auto <intent>
-                    → ~0 tokens, instant
-
-4. Load skill:      /sm load <name>
-                    → loads from vault on demand
-
-5. Execute work:    Bash (RTK auto-compresses)
-                    Read (small files only)
-                    ctx_execute_file (large files)
-
-6. At milestones:   /compact [focus area]
-                    → compresses conversation, saves 100-200K/month
-
-7. Session end:     rtk gain
-                    → see how much you saved this session
-```
-
----
-
-## Anti-Patterns (what NOT to do)
-
-```python
-# ❌ Never: spawn an agent just to check local files
-Agent(prompt="find all TypeScript files in src/")
-# ✅ Instead: one ctx_batch_execute call (~300 tokens vs ~50K tokens)
-
-# ❌ Never: 5 separate Bash calls
-Bash("ls src/")
-Bash("grep 'function' src/ -r")
-Bash("cat README.md")
-Bash("git log --oneline -5")
-Bash("git status")
-# ✅ Always: 1 ctx_batch_execute = 90% savings
-
-# ❌ Never: load all skills at startup
-# (this happens automatically if you don't use vault)
-# ✅ Always: keep only sm.md hot, vault everything else
-
-# ❌ Never: use Read for large files
-Read("path/to/large/file.md")   # full content = thousands of tokens
-# ✅ Always: ctx_execute_file
-ctx_execute_file(path="...", intent="understand structure")  # ~200 tokens
-
-# ❌ Never: bypass shellfirm for "speed"
-# The 2 seconds you save aren't worth the 2 hours of recovery
-# ✅ Always: read the blast radius, then confirm or cancel
+Voice (Whisper Metal)
+    ↓
+uda ask  → syn hybrid (8ms local KB, 161k chunks)
+    ↓ miss?
+super-research --count 30 (parallel ingest 20 engines + batch-md-rs)
+    ↓
+SPEC.md (NEW chat, interview edges)
+    ↓
+/plan → user approve → acceptEdits OR auto mode
+    ↓
+worktree fanout (3 approaches parallel) — Haiku tier
+    ↓
+gsd-executor per worktree (atomic commits + checkpoints)
+    ↓
+verification-loop  (Build→Types→Lint→Tests→Security→Diff)
+    ↓
+master-check (parallel dashboard, alle audits)
+    ↓
+rtk gh pr create  → /ultrareview <PR#>  (cloud multi-agent)
+    ↓
+syn put (durable learning)  +  omega_store (decision)
 ```
 
 ---
 
-## Estimated Monthly Savings
+## §2 NEUE 2.1.x KILLER-FEATURES (must-use ab heute)
 
-| Layer | Sessions/month | Savings/session | Monthly total |
-|-------|----------------|-----------------|---------------|
-| Vault (0 startup tokens) | 300 | ~10K | **3M tokens** |
-| RTK Bash compression | 300 | ~5K | **1.5M tokens** |
-| ctx_batch_execute | 300 | ~8K | **2.4M tokens** |
-| ctx_execute_file/fetch | 300 | ~3K | **0.9M tokens** |
-| /compact at milestones | 300 | ~500 | **150K tokens** |
-| **Total** | | | **~8M tokens/month** |
+| Feature | Wann | Wert |
+|---|---|---|
+| `/loop [prompt]` ohne Intervall | rekurrierende Wartung, Build-Watch | self-paced via Monitor → token-cheap, 7d Expiry |
+| `/ultrareview <PR#>` (+ CLI `claude ultrareview --json`) | jede PR vor Merge | parallele Multi-Agent Review, CI-fähig (exit 1) |
+| `/ultraplan` | komplexe Specs > 3 Files | Cloud-Plan, Browser-Review, "Refine"-Link |
+| ~~`/fast`~~ | **NEVER** (prior decision) | zu teuer, kein guter Trade |
+| `/tui fullscreen` | lange Sessions, viel Tool-Use | flat memory, kein Flicker, alt-screen |
+| `/btw` | Side-Frage ohne Context-Bloat | Antwort NICHT in History |
+| `Esc Esc → Summarize from here` | Mid-Session Compact | erhält Early Context |
+| Auto-Mode (`permissions.defaultMode=auto`) | bekannt-sichere Scopes | classifier blockt Eskalation; **chat-Boundaries gehen bei compact verloren → für Hardgrenze `deny` rules** |
+| Agent Teams (`/agents`) | konkurrierende Hypothesen, Cross-Layer (FE/BE/Tests) | shared task list, jeder Teammate eigener Context. NUR wenn unabhängig — sonst Subagents |
+| Channels (research preview) | inbound Push (Telegram/Discord/iMessage) | reaktive Sessions, allowlist-gated |
+| Remote Control + Mobile Push | Phone-continue laufender Session | outbound HTTPS only, kein Inbound-Port |
+| Skills mit `${CLAUDE_EFFORT}` | effort-aware Verhalten | Skill passt sich an low/med/high/xhigh an |
+| `/reload-plugins` | Skills/MCP/Hooks Hot-Reload | kein Restart |
+| Subagent stall fail @ 10min | seit 2.1.126 | kein silent hang mehr — schnelles Re-Try |
 
-**Cost saved at Sonnet rates ($3/M input):** ~$24/month
-**Cost saved at Opus rates ($5/M input):** ~$40/month
+---
 
-These are conservative estimates. Power users report 10M+ tokens/month saved.
+## §3 MEINE TOP-COMBOS (Skills × Stack)
+
+**1. SPEC FANOUT VERIFY** (höchster Hebel)
+```
+gsd-roadmapper → SPEC.md
+  → 3× rtk git worktree add ../proj-{a,b,c}
+  → 3× Agent (subagent_type=implementer) parallel im einer message
+  → verification-loop pro Worktree
+  → master-check Diff aller 3
+  → merge winner, delete losers
+```
+
+**2. RESEARCH→PATTERN→IMPL**
+```
+super-research "<topic>" --count 50
+  → grepgod find-patterns (ast-grep + comby)
+  → gsd-codebase-mapper
+  → SPEC.md
+  → gsd-executor
+```
+
+**3. STEALTH FETCH→INDEX→REFACTOR**
+```
+hyperfetch --stage camoufox <url>     # 0.07s Cloudflare
+  → ctx_fetch_and_index
+  → ctx_search "<term>"
+  → grepgod ast-rewrite
+```
+
+**4. SKILL-AS-MCP DISPATCH**
+```
+qdrant-os-allskills MCP (300+ skills, 0 token bis Invoke)
+  → semantic match → load only winner
+  → parallel agents via dmux
+```
+
+**5. SPEC-DRIVEN PLUS ULTRA**
+```
+/ultraplan (cloud, browser-refine)
+  → claude --worktree fix-auth
+  → /agents team (FE + BE + Tests parallel)
+  → verification-loop
+  → /ultrareview --json | jq '.findings'
+  → rtk git push
+```
+
+**6. VOICE→SPEC→PR** (3× Tippspeed)
+```
+Whisper Metal (lokal) → dictate intent
+  → SPEC.md
+  → /plan → accept
+  → gsd-executor + verification-loop
+  → /ultrareview → PR
+```
+
+---
+
+## §4 NEUE TOOLS — TOP-10 SOFORT INSTALLIEREN (Mai 2026)
+
+Vollständige 50er-Liste in [tools-and-rss.md](2026-05-03-tools-and-rss.md). Quick-wins:
+
+| # | Tool | Use | Install |
+|---|---|---|---|
+| 1 | **prek** | 10× pre-commit (Rust) | `cargo install prek` |
+| 2 | **ty** (Astral) | mypy/pyright Killer, 50-200× | `uv add ty --dev` |
+| 3 | **OpenCode** | Terminal-Agent, 70+ LLMs | `npm i -g @opencode/cli` |
+| 4 | **zizmor** | GH Actions Static-Analyzer | `cargo install zizmor` |
+| 5 | **OpenObserve** | ELK+Loki+Tempo Replacement, 140× günstiger | docker |
+| 6 | **kingfisher** | MongoDB Secret-Scanner, schneller als gitleaks | `cargo install kingfisher` |
+| 7 | **gitu** | Magit-style TUI Git (Rust) | `cargo install gitu` |
+| 8 | **Limbo** | Async SQLite-Rewrite + vec built-in | `cargo install limbo` |
+| 9 | **Pkl** | typed config (Apple), YAML/Jsonnet Killer | `brew install pkl` |
+| 10 | **Atuin 18** | Shell-History Sync E2E-encrypted | `brew install atuin` |
+
+---
+
+## §5 RSS — TOP 1000 GITHUB RELEASES
+
+**Empfehlung**: **newreleases.io Pro** ($10/mo, unlimited) → Webhook → eigenes **miniflux** self-host
+
+```
+newreleases.io (1000 repos: GH+GitLab+npm+PyPI+crates+Docker+Helm)
+    ├─→ Telegram channel "releases"  (instant)
+    ├─→ Email Daily-Digest 08:00
+    └─→ Webhook → miniflux self-host
+                     ↓
+            miniflux-digest skill
+                     ↓
+            Obsidian + Synapse Index
+```
+
+Setup: bulk OPML Import via REST API (`/v1/projects`). Fallback ohne SaaS: miniflux + `gh-releases-bridge` (rss-bridge fork) + cron.
+
+---
+
+## §6 TOKEN-RULES (kosten-optimiert)
+
+1. **Tier-Ladder**: Haiku=explore → Sonnet=code → Opus=arch only. Bandit auto via `core/orchestrator.py`
+2. **RTK prefix immer** — 60-90% savings auf git/build/test
+3. **ctx_batch_execute** statt 2+ Bash → 1 round-trip statt N
+4. **syn hybrid 8ms** vor jedem Web-Fetch
+5. **Skills progressive disclosure** — nur `description` always-loaded
+6. **Subagents = isolated context** → main bleibt frei
+7. **/btw** für Side-Fragen — geht NICHT in History
+8. **/compact <focus> @ 60%** — nicht erst bei 90%, cache-hits bleiben warm
+9. **/loop ohne Intervall** — Monitor tool, kein Polling
+10. **`/fast` NIE** — prior decision, zu teuer
+11. **effort=low default**, `ultrathink` keyword nur für komplexe turns
+12. **NPX-Hooks killen** — pro tool call 2-5K tok + 500ms overhead
+13. **Stop-Hooks `async: true`** — blockiert sonst exit
+
+---
+
+## §7 PROJEKT-ERFOLGS-REGELN (was = "erfolgreiches Projekt")
+
+### A. ENTRY (jede Task)
+- [ ] CLAUDE.md + sub-CLAUDE.md gelesen
+- [ ] `uda ask "<keywords>"` ausgeführt
+- [ ] `know.py broken` check
+- [ ] Wenn > 3 Files → SPEC.md + NEW chat
+- [ ] Context > 70% → `/clear` + 3-Zeilen Handoff
+- [ ] OMEGA welcome + protocol
+
+### B. PLAN
+- [ ] Edges interviewed (kein "ich nehm an")
+- [ ] SPEC.md geschrieben + reviewed
+- [ ] `/plan` mode, approve EINMAL, dann `acceptEdits`
+- [ ] Worktree fanout wenn Approach unklar
+- [ ] Cost-Schätzung pro Tier (Haiku/Sonnet/Opus)
+
+### C. EXECUTE
+- [ ] `rtk` prefix auf JEDEM Bash
+- [ ] `bun` statt npm/yarn/pnpm; `uv` statt pip; `cargo nextest` statt cargo test
+- [ ] Mining-first: ghgrep + steal + minimal-adapt VOR scratch
+- [ ] Subagents parallel wenn unabhängig (1 message, N Agent calls)
+- [ ] Atomic commits per logical unit
+- [ ] Checkpoints (`Esc Esc`) vor riskanten Changes
+
+### D. VERIFY (HARD-GATE — alle ✅)
+- [ ] `tsc --noEmit` 0 errors
+- [ ] `biome lint` 0 warnings (oder ruff/clippy)
+- [ ] `bun test --bail` green
+- [ ] `bun run build` success
+- [ ] `cargo nextest run` green (Rust)
+- [ ] `semgrep --config=auto` clean
+- [ ] `gitleaks` no findings
+- [ ] `verification-loop` 6/6 ✅
+- [ ] `master-check` dashboard alles grün
+
+### E. SECURITY
+- [ ] `smac-secscan .`
+- [ ] husky pre-commit Biome aktiv
+- [ ] Auto-Mode `deny` rules für irreversible Ops (rm -rf, force-push, DROP)
+- [ ] Bash deny matched env/sudo/watch/ionice/setsid wrappers
+- [ ] OAuth/Secrets nicht in commit (gitleaks)
+
+### F. SHIP
+- [ ] `claude ultrareview --json` exit 0
+- [ ] Conventional Commit Message (`fix:` `feat:` `refactor:` …) mit Issue-Ref `#NNN`
+- [ ] PR Description aus SPEC.md generiert
+- [ ] CI grün
+- [ ] OMEGA `omega_store(content, "decision")` min 1 pro Session
+- [ ] Synapse `syn put` für durable learning
+
+### G. POST
+- [ ] `rtk gain` Token-Savings Check
+- [ ] Telepathy update (cross-session sync)
+- [ ] Skill/Tool-Lessons → `feedback_*.md` memory
+- [ ] Project memory updated wenn Scope/Deadline changed
+
+---
+
+## §8 ANTI-PATTERNS (NIEMALS)
+
+- ❌ npm/yarn/pnpm new project · pip/poetry/pipx · ESLint+Prettier · Webpack/Babel · Jest · Selenium · Heroku · Datadog · ChromaDB · Pinecone · LangChain · SurrealDB-prod · Mongo · Firebase · Clerk · Auth0 · Vercel-prod · Qwen models
+- ❌ Agent für simple Lookup (use Read/Grep direkt)
+- ❌ WebFetch unknown site (use hyperfetch)
+- ❌ rtk ls/grep/env/read (overhead +35-10000%)
+- ❌ `cat` via Bash (use Read)
+- ❌ raw `find -name` (use fd)
+- ❌ Implementation ohne SPEC bei > 3 Files
+- ❌ Force-push ohne user confirm
+- ❌ Auto-Mode mit chat-Boundaries als Sicherheit (compact = lost)
+- ❌ Agent Teams für sequential/same-file work (use Subagents)
+- ❌ `/fast` überhaupt (prior decision NEVER)
+- ❌ `npx <thing>` in PreToolUse/PostToolUse Hooks (pro-call Overhead)
+- ❌ Synchronous Stop hooks (blockt exit)
+- ❌ effort=high als Default (override → low, ultrathink für complex)
+- ❌ Settings ohne `includeGitInstructions:false` (verschwendet 2K tok wenn eigene git-rules)
+- ❌ Mocks in Integration-Tests (lessons learned)
+
+---
+
+## §9 QUICK-START NEXT SESSION
+
+```bash
+omega_welcome && omega_protocol           # memory briefing
+uda ask "<keywords>"                       # local KB
+rtk gain --history                         # token savings check
+rtk skill-health                           # 3 new skills present?
+/context-budget                            # window usage
+/plan                                      # plan mode default
+```
+
+---
+
+## §10 DAILY HABIT (5 min/Tag)
+
+1. `tail ~/.claude/logs/ggcoder-autopatch.log`
+2. miniflux digest top-3 releases (via newreleases.io webhook)
+3. `syn timeline 24h` — was ist passiert
+4. `omega_call(tool='omega_reflect', args={topic:'today'})`
+5. ein neues Skill/Tool aus §4 testen + bewerten
+
+---
+
+**Erfolg = SPEC frontloaded + Verify-Gate strict + Token-Tier diszipliniert + Mining-first + Memory persistent.**
+
+Files:
+- Best practices detail: `~/.claude/research/2026-05-03-cc-bestpractices.md`
+- Tools + RSS detail: `~/.claude/research/2026-05-03-tools-and-rss.md`
+- Local arsenal detail: `~/.claude/research/2026-05-03-local-arsenal.md`
+- Diese Datei: `~/.claude/research/SUPER-BESTPRACTICES-2026-05.md`
